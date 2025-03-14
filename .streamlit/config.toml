@@ -1,0 +1,10 @@
+[theme]
+base="light"
+primaryColor="#2e2ef9"
+secondaryBackgroundColor="#cddfef"
+
+[runner]
+fastReruns = true
+
+[client]
+showSidebarNavigation = false
