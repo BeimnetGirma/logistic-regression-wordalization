@@ -232,10 +232,10 @@ class DistributionPlot(Visual):
             self.fig.add_trace(
                 go.Scatter(
                     x=[-1.2],
-                    y=[2],
+                    y=[i],
                     mode="markers",
                     marker={
-                        "color": rgb_to_color(self.bright_green, opacity=0.2),
+                        "color": rgb_to_color(self.bright_green, opacity=0.6),
                         "size": 18,
                         
                     },
