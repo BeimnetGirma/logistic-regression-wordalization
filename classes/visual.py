@@ -398,6 +398,10 @@ class DistributionModelPlot(DistributionPlot):
         self.fig.update_yaxes(showticklabels=False, fixedrange=True, gridcolor=rgb_to_color(self.medium_green), zerolinecolor=rgb_to_color(self.medium_green))
 
     def  add_individual(self, individual, n_group, metrics, target=None, center=0):
+        print("*********************")
+
+
+        print("Adding individual")
         
         # Make list of all metrics with _Z and _Rank added at end 
         metrics_Z = [metric + "_contribution" for metric in metrics]
