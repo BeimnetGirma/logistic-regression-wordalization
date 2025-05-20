@@ -101,8 +101,8 @@ class Visual:
             autosize=True,
             height=500,
             margin=dict(l=side_margin, r=side_margin, b=70, t=top_margin, pad=pad),
-            paper_bgcolor=rgb_to_color(self.white),
-            plot_bgcolor=rgb_to_color(self.white),
+            paper_bgcolor=rgb_to_color(self.dark_green),
+            plot_bgcolor=rgb_to_color(self.dark_green),
             legend=dict(
                 orientation="h",
                 font={
@@ -230,22 +230,39 @@ class DistributionPlot(Visual):
             print("*********************")
             print("About to add trace")
             self.fig.add_trace(
-                
                 go.Scatter(
-                    x=df_plot[col + plots],
-                    y=np.ones(len(df_plot)) * i,
+                    x=[-1.2],
+                    y=[2],
                     mode="markers",
                     marker={
                         "color": rgb_to_color(self.bright_green, opacity=0.2),
-                        "size": 10,
+                        "size": 18,
+                        
                     },
                     hovertemplate="%{text}<br>" + temp_hover_string + "<extra></extra>",
-                    text=names,
-                    customdata=df_plot[col + hover],
-                    name=legend,
-                    showlegend=showlegend,
+                    text="Testing",
+                    customdata=[50],
+                    name="Testing",
+                    showlegend=False,
                 )
             )
+            # self.fig.add_trace(
+                
+            #     go.Scatter(
+            #         x=df_plot[col + plots],
+            #         y=np.ones(len(df_plot)) * i,
+            #         mode="markers",
+            #         marker={
+            #             "color": rgb_to_color(self.bright_green, opacity=0.2),
+            #             "size": 10,
+            #         },
+            #         hovertemplate="%{text}<br>" + temp_hover_string + "<extra></extra>",
+            #         text=names,
+            #         customdata=df_plot[col + hover],
+            #         name=legend,
+            #         showlegend=showlegend,
+            #     )
+            # )
             showlegend = False
 
     def add_data_point(self, ser_plot, plots, name, hover='', hover_string="", text=None,annotation="", target=None, center=0):
