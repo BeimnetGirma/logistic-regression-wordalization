@@ -422,8 +422,10 @@ class DistributionModelPlot(DistributionPlot):
         )
 
     def add_individuals(self, individuals, metrics, target=None):
-        
-
+        print("*********************")
+        print("*********************")
+        print("*********************")
+        print("Adding individuals")
         # Make list of all metrics with _Z and _Rank added at end 
         metrics_Z = [metric + "_contribution" for metric in metrics]
         self.add_group_data(
