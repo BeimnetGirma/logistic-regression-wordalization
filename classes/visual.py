@@ -229,6 +229,9 @@ class DistributionPlot(Visual):
 
             print("*********************")
             print("About to add trace")
+            print("X:", df_plot[col + plots].head())
+            print("Y:", np.ones(len(df_plot)) * i)
+
             self.fig.add_trace(
 
                 go.Scatter(
