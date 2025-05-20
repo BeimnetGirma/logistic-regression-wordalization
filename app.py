@@ -27,7 +27,7 @@ def setup_model(train=False):
     st.write("Upload a CSV file to use as the data source.")
     uploaded_file = st.file_uploader("Choose a CSV file", type="csv", key="data_file")
     # Default file for testing
-    uploaded_file = open("C:/Users/beimn/Documents/workdir/Python for Data Science/anuerysm/bmi_train_data_70000_Ind.csv", "rb")
+    uploaded_file = open("data/medical/training_data_70000_Ind.csv", "rb")
     
     
     
@@ -37,7 +37,7 @@ def setup_model(train=False):
         # st.write("Upload a CSV file to explaining the features.")
         # feature_file = st.file_uploader("Choose a CSV file", type="csv", key="feature_file")
         # Default file for testing
-        feature_file= open("C:/Users/beimn/Documents/workdir/Python for Data Science/anuerysm/train_data_explanation.csv", "rb")
+        feature_file= open("data/medical/feature_explanation.csv", "rb")
         selected_features = st.multiselect("Remove features you want to discard", all_columns, default=all_columns)
         # Create editable DataFrame
         explanation_df = pd.DataFrame({
@@ -76,7 +76,7 @@ def setup_model(train=False):
                 # st.write("Upload a JSON file detailing the interpretations of the categorical data.")
                 # json_file = st.file_uploader("Choose a JSON file", type="json", key="category_json_file")
                 # Default file for testing
-                json_file = open("C:/Users/beimn/Documents/workdir/Python for Data Science/anuerysm/train_data_categorical_features.json", "rb")
+                json_file = open("data/medical/categorical_features.json", "rb")
                 if json_file is not None:
                     preloaded_categorical_interpretations = json.load(json_file)
                     
@@ -446,8 +446,8 @@ tab1, tab2 = st.tabs(["Setup Model", "Chat"])
 
 with tab1:
     st.header("Setup Model")
-    model_option = st.radio("Do you want to train a new model or use an existing trained model?", ("Train a new model", "Use an existing trained model"))  
-    if model_option == "Train a new model":
+    model_option = st.radio("Do you want to train a new model or use an existing trained model?", ("Train a new model (data pre-loaded for demo)", "Use an existing trained model"))  
+    if model_option == "Train a new model (data pre-loaded for demo)":
         st.write("You chose to train a new model. Please upload the raw data, and the explanations of the parameters in the data in CSV format.")
         # trainModel()
         result = setup_model(train=True)

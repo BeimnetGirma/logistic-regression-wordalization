@@ -1,0 +1,8 @@
+{
+  "gender": { "1": "Being female", "2": "Being male" },
+  "cholesterol": { "1": "Having normal cholestero levels", "2": "Having above normal cholestero levels", "3": "Having well above normal cholestero levels" },
+  "gluc": { "1": "Having normal glucose levels", "2": "Having above normal glucose levels", "3": "Having well above normal glucose levels" },
+  "smoke": { "0": "Not smoking", "1": "Being a smoker" },
+  "alco": { "0": "Not drinking alcohol", "1": "Drinking alchohol" },
+  "active": { "0": "Not having an active lifestyle", "1": "Having an active lifestyle" }
+}
