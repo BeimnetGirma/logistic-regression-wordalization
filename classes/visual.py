@@ -209,9 +209,7 @@ class DistributionPlot(Visual):
         print("*********************")
         print("*********************")
         print("Adding group data")
-        print(df_plot)
-        print("*********************")
-
+                
         showlegend = True
 
         for i, col in enumerate(self.columns):
@@ -229,7 +227,10 @@ class DistributionPlot(Visual):
             else:
                 marker_colors = [rgb_to_color(self.bright_green, opacity=0.2)] * len(df_plot)
 
+            print("*********************")
+            print("About to add trace")
             self.fig.add_trace(
+                
                 go.Scatter(
                     x=df_plot[col + plots],
                     y=np.ones(len(df_plot)) * i,
