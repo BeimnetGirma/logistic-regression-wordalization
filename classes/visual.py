@@ -239,8 +239,12 @@ class DistributionPlot(Visual):
                     y=np.ones(len(df_plot)) * i + np.random.normal(0, 0.05, len(df_plot)),
                     mode="markers",
                     marker={
-                        "color": marker_colors,
+                        
+                        "color": rgb_to_color( self.table_red , opacity=0.5),
                         "size": 10,
+                        "symbol": self.marker_shape,
+                        "line_width": 1.5,
+                        "line_color": rgb_to_color(self.table_red),
                     },
                     hovertemplate="%{text}<br>" + temp_hover_string + "<extra></extra>",
                     text=names,
