@@ -231,6 +231,7 @@ class DistributionPlot(Visual):
             print("About to add trace")
             print("X:", df_plot[col + plots].head())
             print("Y:", np.ones(len(df_plot)) * i)
+            
 
             self.fig.add_trace(
 
@@ -240,9 +241,9 @@ class DistributionPlot(Visual):
                     mode="markers",
                     marker={
                         
-                        "color": rgb_to_color( self.table_red , opacity=0.5),
+                        "color": rgb_to_color(self.bright_green),
                         "size": 10,
-                        "symbol": self.marker_shape,
+                        "symbol": "circle",
                         "line_width": 1.5,
                         "line_color": rgb_to_color(self.table_red),
                     },
