@@ -221,7 +221,7 @@ class DistributionPlot(Visual):
             # only use 2 colors for the logistic regression chat plot
             if target in df_plot.columns:
                 marker_colors = [
-                    rgb_to_color(self.table_red, opacity=0.2) if val == 1 else rgb_to_color(self.bright_green, opacity=0.2)
+                    rgb_to_color(self.table_red, opacity=0.6) if val == 1 else rgb_to_color(self.bright_green, opacity=0.6)
                     for val in df_plot[target]
                 ]
             else:
@@ -230,10 +230,10 @@ class DistributionPlot(Visual):
             print("*********************")
             print("About to add trace")
             self.fig.add_trace(
-                
+
                 go.Scatter(
                     x=df_plot[col + plots],
-                    y=np.ones(len(df_plot)) * i,
+                    y=np.ones(len(df_plot)) * i + np.random.normal(0, 0.05, len(df_plot)),
                     mode="markers",
                     marker={
                         "color": marker_colors,
