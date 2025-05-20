@@ -101,8 +101,8 @@ class Visual:
             autosize=True,
             height=500,
             margin=dict(l=side_margin, r=side_margin, b=70, t=top_margin, pad=pad),
-            paper_bgcolor=rgb_to_color(self.dark_green),
-            plot_bgcolor=rgb_to_color(self.dark_green),
+            paper_bgcolor=rgb_to_color(self.white),
+            plot_bgcolor=rgb_to_color(self.white),
             legend=dict(
                 orientation="h",
                 font={
@@ -221,7 +221,7 @@ class DistributionPlot(Visual):
             # only use 2 colors for the logistic regression chat plot
             if target in df_plot.columns:
                 marker_colors = [
-                    rgb_to_color(self.table_red, opacity=0.6) if val == 1 else rgb_to_color(self.bright_green, opacity=0.6)
+                    rgb_to_color(self.table_red, opacity=0.2) if val == 1 else rgb_to_color(self.bright_green, opacity=0.2)
                     for val in df_plot[target]
                 ]
             else:
@@ -229,23 +229,15 @@ class DistributionPlot(Visual):
 
             print("*********************")
             print("About to add trace")
-            print("X:", df_plot[col + plots].head())
-            print("Y:", np.ones(len(df_plot)) * i)
-            
-
             self.fig.add_trace(
-
+                
                 go.Scatter(
                     x=df_plot[col + plots],
-                    y=np.ones(len(df_plot)) * i + np.random.normal(0, 0.05, len(df_plot)),
+                    y=np.ones(len(df_plot)) * i,
                     mode="markers",
                     marker={
-                        
-                        "color": rgb_to_color(self.bright_green),
+                        "color": rgb_to_color(self.bright_green, opacity=0.2),
                         "size": 10,
-                        "symbol": "circle",
-                        "line_width": 1.5,
-                        "line_color": rgb_to_color(self.table_red),
                     },
                     hovertemplate="%{text}<br>" + temp_hover_string + "<extra></extra>",
                     text=names,
@@ -430,10 +422,8 @@ class DistributionModelPlot(DistributionPlot):
         )
 
     def add_individuals(self, individuals, metrics, target=None):
-        print("*********************")
-        print("*********************")
-        print("*********************")
-        print("Adding individuals")
+        
+
         # Make list of all metrics with _Z and _Rank added at end 
         metrics_Z = [metric + "_contribution" for metric in metrics]
         self.add_group_data(
