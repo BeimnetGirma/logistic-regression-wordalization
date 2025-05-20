@@ -174,7 +174,7 @@ def setup_model(train=False):
 
 def setup_data(data, model_features, categorical_interpretations=None, target=None):
     model=Model()
-    model.set_data(data.head(200), model_features, categorical_interpretations=categorical_interpretations)
+    model.set_data(data.head(90), model_features, categorical_interpretations=categorical_interpretations)
     model.process_data()
     model.weight_contributions()
     # bins=model.risk_thresholds()
