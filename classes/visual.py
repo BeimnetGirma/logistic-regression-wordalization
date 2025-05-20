@@ -203,6 +203,7 @@ class DistributionPlot(Visual):
         )
 
     def add_group_data(self, df_plot, plots, names, legend, hover="", hover_string="", target=None):
+        print("Adding group data")
         showlegend = True
 
         for i, col in enumerate(self.columns):
@@ -405,13 +406,21 @@ class DistributionModelPlot(DistributionPlot):
             ser_plot=individual.ser_metrics,
             plots = '_contribution',
             name=str(individual.id),
-            hover='_contribution',
+            hover='',
             hover_string="Value: %{customdata}",
             target=target,
             center=center
         )
 
     def add_individuals(self, individuals, metrics, target=None):
+        print("*********************")
+        print("*********************")
+        print("*********************")
+        print("*********************")
+        print("*********************")
+
+
+        print("Adding individuals")
 
         # Make list of all metrics with _Z and _Rank added at end 
         metrics_Z = [metric + "_contribution" for metric in metrics]
@@ -419,7 +428,7 @@ class DistributionModelPlot(DistributionPlot):
             df_plot=individuals.df,
             plots = '_contribution',
             names=individuals.df["ID"].astype(str),
-            hover='_contribution',
+            hover='',
             hover_string="Value: %{customdata:.2f}",
             legend=f"Other individuals  ", #space at end is important
             target=target
