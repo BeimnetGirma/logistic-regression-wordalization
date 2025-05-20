@@ -20,7 +20,7 @@ from classes.description import (
 )
 from classes.embeddings import PlayerEmbeddings, CountryEmbeddings, PersonEmbeddings
 
-from classes.visual import Visual, DistributionPlot, DistributionPlotPersonality
+from classes.visual import Visual, DistributionPlot
 
 import utils.sentences as sentences
 from utils.gemini import convert_messages_format
@@ -213,11 +213,11 @@ class ModelChat(Chat):
         """
         Get input from streamlit."""
   
-        if x := st.chat_input(placeholder=f"What else would you like to know?"):
-            if len(x) > 500:
-                st.error(f"Your message is too long ({len(x)} characters). Please keep it under 500 characters.")
+        # if x := st.chat_input(placeholder=f"What else would you like to know?"):
+        #     if len(x) > 500:
+        #         st.error(f"Your message is too long ({len(x)} characters). Please keep it under 500 characters.")
 
-            self.handle_input(x)
+        #     self.handle_input(x)
 
     def instruction_messages(self):
         """

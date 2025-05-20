@@ -592,9 +592,10 @@ class Model(Data):
     def get_raw_data(self):
         df = pd.read_excel("data/medical/Anuerysm data.xlsx")
         return df
-    def set_data(self, df_raw, parameters):
+    def set_data(self, df_raw, parameters, categorical_interpretations):
         self.df= df_raw
         self.parameters= parameters
+        self.categorical_interpretations = categorical_interpretations
 
     # def process_data(self, df_raw):
 
@@ -671,16 +672,56 @@ class Model(Data):
 
     #     self.df = df
     
-    def weight_contributions(self):
+    def weight_contributions(self, type='method-1'):
         
         df = self.df
         
         parameters = self.parameters
         for i,row in self.parameters.iterrows():
-            df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
-            #Remove the mean
-            df[row['Parameter']+'_contribution'] = df[row['Parameter']+'_contribution'] - df[row['Parameter']+'_contribution'].mean()
-        
+            # # Standardize the data
+            # df[row['Parameter']] = (df[row['Parameter']] - df[row['Parameter']].mean()) 
+            if type == 'method-1':
+                #  Contributionj​=xj​×βj​−Mean(Contributionj​)
+                df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
+                #Remove the mean
+                df[row['Parameter']+'_contribution'] = df[row['Parameter']+'_contribution'] - df[row['Parameter']+'_contribution'].mean()
+            elif type == 'method-2':    
+                #Calculate Odds Ration
+                df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
+                df[row['Parameter']+'_contribution'] = np.exp(df[row['Parameter']+'_contribution'])
+            elif type == 'method-3':
+                #Calculate Odds Ration
+                df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
+                df[row['Parameter']+'_contribution'] = np.exp(df[row['Parameter']+'_contribution'])
+                # #Standardize the data
+                df[row['Parameter']+'_contribution'] = (df[row['Parameter']+'_contribution'] - df[row['Parameter']+'_contribution'].mean())
+                # # #Remove the mean
+                # df[row['Parameter']+'_contribution'] = df[row['Parameter']+'_contribution'] - df[row['Parameter']+'_contribution'].mean()
+            elif type == 'method-4':
+                #  Contributionj=e^(xj​×βj​- mean(xj​×βj))
+                df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
+                #Remove the mean
+                df[row['Parameter']+'_contribution'] = df[row['Parameter']+'_contribution'] - df[row['Parameter']+'_contribution'].mean()
+                df[row['Parameter']+'_contribution'] = np.exp(df[row['Parameter']+'_contribution'])
+                
+
+            elif type == 'method-5':
+                #  Contributionj=e^(xj​×βj​- mean(xj​×βj)) except for categorical fetures where Contributionj=e^(xj​×βj)
+                if row['Parameter'] in self.categorical_interpretations:
+                    df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
+                    df[row['Parameter']+'_contribution'] = np.exp(df[row['Parameter']+'_contribution'])
+                else:
+                    df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
+                    #Remove the mean
+                    df[row['Parameter']+'_contribution'] = df[row['Parameter']+'_contribution'] - df[row['Parameter']+'_contribution'].mean()
+                    df[row['Parameter']+'_contribution'] = np.exp(df[row['Parameter']+'_contribution'])
+            elif type == 'method-6':
+                #  Contributionj=e^(xj​×βj)/ mean(e^xj​×βj)) 
+                df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
+                df[row['Parameter']+'_contribution'] = np.exp(df[row['Parameter']+'_contribution'])
+                # Divide by mean
+                df[row['Parameter']+'_contribution'] = df[row['Parameter']+'_contribution'] / df[row['Parameter']+'_contribution'].mean()
+
 
         self.parameter_explanation = parameters.set_index('Parameter')['Explanation'].to_dict()
 
@@ -691,16 +732,62 @@ class Model(Data):
 
         
 
-    def most_variable_data(self):
+    def calulcate_threshold(self, odds_space=False):
         df = self.df
         contribution_columns = [col for col in df.columns if '_contribution' in col and col != 'total_risk_contribution']
         self.std_contributions = df[contribution_columns].std()
-        most_vairable_column= self.std_contributions.idxmax()
-        most_variable_data = self.df[most_vairable_column]
+        most_variable_column= self.std_contributions.idxmax()
+        most_variable_data = self.df[most_variable_column]
         mean, std = np.mean(most_variable_data),np.std(most_variable_data)
 
-        thresholds = [round(mean + i * std, 2) for i in range(-2, 3) if i != 0]  #range (-3,4) for 6 thresholds
-        return thresholds
+        
+        # center= most_variable_data.mean()
+        # distance_to_min=abs(center- most_variable_data.min())
+        # distance_to_max= abs(most_variable_data.max()-center)  
+        # max_distance=max(distance_to_min,distance_to_max)
+        # margin=0.01*max_distance
+        # plot_range= (center-max_distance-margin,center+max_distance+margin)
+        # plot_range= (most_variable_data.min(),most_variable_data.max())
+        # print(f"Plot range: {most_variable_data.min()} {most_variable_data.max()} {plot_range}")
+
+
+        linear_thresholds = [round(mean + i * std, 2) for i in [-2, -1, 1, 2]]
+        if odds_space:
+            # Convert to odds space
+            # log_data= np.exp(most_variable_data)
+            # log_std= np.std(log_data)
+            # thresholds= [round(np.exp(i * log_std), 2) for i in [-1, -0.5, 0.5, 1]]
+            # thresholds = [round(np.exp(i), 2) for i in linear_thresholds]
+
+            # just for approach 4
+
+            # df = self.df
+            
+            # for i,row in self.parameters.iterrows():
+            #     log_odds = df[row['Parameter']] * row['Value']
+            #     mean_log_odds = np.mean(log_odds)
+            #     std_log_odds = np.std(log_odds)
+            #     thresholds=[np.exp(mean_log_odds + i * std_log_odds) for i in [-1, -0.5, 0.5, 1]]
+
+            log_thresholds = [-1, -0.5, 0.5, 1]
+            thresholds = [round(np.exp(x), 2) for x in log_thresholds]
+            plot_range=[thresholds[0], thresholds[-1]]
+            
+        else:
+            thresholds = linear_thresholds
+            plot_range= [thresholds[0], thresholds[-1]]
+        
+        # range = [0.2, 5]
+        # range= (most_variable_data.min(), most_variable_data.max())
+        # min_val = df['ap_hi_contribution'].min()
+        # max_val = df['ap_hi_contribution'].max()
+        # padding = 0.05 * (max_val - min_val)
+        # plot_range = [min_val, max_val ] 
+
+        # print(f"Plot range: {most_variable_data.min()} {most_variable_data.max()} {range}")
+        # print(f"Thresholds: {thresholds}")
+        # print(f"Linear thresholds: {linear_thresholds}")
+        return thresholds, plot_range
     def risk_thresholds(self):
         bins_dict = {}
         for col in self.df.columns:
