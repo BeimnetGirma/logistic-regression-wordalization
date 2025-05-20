@@ -203,7 +203,15 @@ class DistributionPlot(Visual):
         )
 
     def add_group_data(self, df_plot, plots, names, legend, hover="", hover_string="", target=None):
+        print("*********************")
+        print("*********************")
+        print("*********************")
+        print("*********************")
+        print("*********************")
         print("Adding group data")
+        print(df_plot)
+        print("*********************")
+
         showlegend = True
 
         for i, col in enumerate(self.columns):
@@ -398,11 +406,7 @@ class DistributionModelPlot(DistributionPlot):
         self.fig.update_yaxes(showticklabels=False, fixedrange=True, gridcolor=rgb_to_color(self.medium_green), zerolinecolor=rgb_to_color(self.medium_green))
 
     def  add_individual(self, individual, n_group, metrics, target=None, center=0):
-        print("*********************")
-
-
-        print("Adding individual")
-        
+                
         # Make list of all metrics with _Z and _Rank added at end 
         metrics_Z = [metric + "_contribution" for metric in metrics]
         
@@ -417,14 +421,7 @@ class DistributionModelPlot(DistributionPlot):
         )
 
     def add_individuals(self, individuals, metrics, target=None):
-        print("*********************")
-        print("*********************")
-        print("*********************")
-        print("*********************")
-        print("*********************")
-
-
-        print("Adding individuals")
+        
 
         # Make list of all metrics with _Z and _Rank added at end 
         metrics_Z = [metric + "_contribution" for metric in metrics]
