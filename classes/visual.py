@@ -203,12 +203,6 @@ class DistributionPlot(Visual):
         )
 
     def add_group_data(self, df_plot, plots, names, legend, hover="", hover_string="", target=None):
-        print("*********************")
-        print("*********************")
-        print("*********************")
-        print("*********************")
-        print("*********************")
-        print("Adding group data")
                 
         showlegend = True
 

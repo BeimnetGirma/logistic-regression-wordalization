@@ -751,7 +751,7 @@ class Model(Data):
         # print(f"Plot range: {most_variable_data.min()} {most_variable_data.max()} {plot_range}")
 
 
-        linear_thresholds = [round(mean + i * std, 2) for i in [-2, -1, 1, 2]]
+        linear_thresholds = [round(mean + i * std, 2) for i in [-1, -0.5, 0.5, 1]]
         if odds_space:
             # Convert to odds space
             # log_data= np.exp(most_variable_data)
