@@ -179,7 +179,7 @@ class Description(ABC):
             str
         """
 
-        # st.expander("Chat transcript", expanded=False).write(self.messages)
+        st.write("Chat transcript:", self.messages)
 
         if USE_GEMINI:
             import google.generativeai as genai
@@ -730,89 +730,71 @@ class IndividualDescription(Description):
         return intro
 
     def synthesize_text(self):
-
-        individual=self.individual
         metrics = self.metrics
-        calculated_age= self.calculate_risk_age(self.odds_space)
-        
-        if self.fixed_description:
-            description = f"Here is a statistical description of the factors related to {self.target} issues for the patient. \n\n "
-            
+        calculated_age= self.calculate_risk_age()
+        beta_age= self.get_beta("age")
+        description = f"Here is a statistical description of the factors related to {self.target} issues for the patient. \n\n "
 
-            for metric in metrics:
-                
-                if self.categorical_interpretations and metric in self.categorical_interpretations:
-                    # if categorical interpretation is available, look up the value in the interpretation dictionary
-                    value = self.categorical_interpretations[metric].get(str(int(individual.ser_metrics[metric])), individual.ser_metrics[metric])
-                    description+= f" {value} "
-                else:
-                    # if no interpretation is available, just use the value
-                    description+= sentences.article(self.parameter_explanation[metric].lower()) + f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(individual.ser_metrics[metric])} "
-                
-                # self.thresholds.reverse()
-                words=["implies a strongly reduced risk", "implies a moderately reduced risk","implies no significant effect", "implies a moderately increased risk", "implies a strongly increased risk"]
-                description += sentences.describe_contributions(individual.ser_metrics[metric +"_contribution"], thresholds=self.thresholds, words=words)
-                description += f" of developing {self.target} issues."
-                
-            # Add a sentence about the overall risk
-            words=["strongly reduced", "moderately reduced","average", "moderately increased", "strongly increased"]
-            description += f" The patient's overall risk of developing {self.target} issues is {sentences.describe_contributions(individual.ser_metrics['total_risk_contribution'], thresholds=self.bins['total_risk_contribution'],words=words)} compared to other patients who come into the clinic."
-            if(individual.ser_metrics['total_risk_contribution'] > self.bins['total_risk_contribution'][1]):    
-                max_metric = max(
-                    {k: v for k, v in individual.ser_metrics.items() if k.endswith("_contribution") and k != "total_risk_contribution"},
-                    key=individual.ser_metrics.get 
-                )
-                max_metric = max_metric.replace("_contribution", "")
-                description += f" The highest contribution factor for developing {self.target} issues is the patient's {self.parameter_explanation[max_metric].lower()}."
-            description += f" The patient's risk of developing {self.target} issues is equivalent to that of a {calculated_age:.1f} year old."
-            # st.expander("Description with one fixed threshold", expanded=False).write(description)
+        for metric in metrics:
+            description+= self.describe_metric(metric, beta_age)
 
-        else:    
-            description = f"Here is a statistical description of the factors related to {self.target} issues for the patient. \n\n "
-            beta_age = self.model_features.loc[self.model_features['Parameter'] == 'age', 'Value'].values[0]
-            for metric in metrics:
-                beta_feature = self.model_features.loc[self.model_features['Parameter'] == metric, 'Value'].values[0]
-                
-                if self.categorical_interpretations and metric in self.categorical_interpretations:
-                    # if categorical interpretation is available, look up the value in the interpretation dictionary
-                    value = self.categorical_interpretations[metric].get(str(int(individual.ser_metrics[metric])), individual.ser_metrics[metric])
-                    
-                    risk_increase = self.calcaulte_catergorical_risk_age_increase(beta_feature, beta_age)
-                    description+= f" {value} "
-                else:
-                    # if no interpretation is available, just use the value
-                    description+= sentences.article(self.parameter_explanation[metric].lower()) + f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(individual.ser_metrics[metric])} "
-                    risk_increase=self.calculate_risk_age_increase(metric,individual.ser_metrics[metric], beta_feature, beta_age)
-                
-                # self.thresholds.reverse()
-                words=["implies a strongly reduced risk", "implies a moderately reduced risk","implies no significant effect", "implies a moderately increased risk", "implies a strongly increased risk"]
-                description += sentences.describe_contributions(individual.ser_metrics[metric +"_contribution"], thresholds=self.bins[metric +"_contribution"], words=words)
-                description += f" of developing {self.target} issues."
+        description+= self.describe_overall_risk(calculated_age)
 
-                # depending on the value of risk_increase pick between increas and decrease
-                effect = "decreases" if risk_increase < 0 else "increases"
-                risk_increase = abs(risk_increase)
-
-                if self.categorical_interpretations and metric in self.categorical_interpretations:
-                    value = self.categorical_interpretations[metric].get(str(int(individual.ser_metrics[metric])), individual.ser_metrics[metric])
-                    description+= f" {value} "
-                else:
-                    description+= sentences.article(self.parameter_explanation[metric].lower()) + f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(individual.ser_metrics[metric])} "
-                description+= f" {effect} your risk age by {sentences.format_numbers(risk_increase)} years. "
-
-            # Add a sentence about the overall risk
-            words=["strongly reduced", "moderately reduced","average", "moderately increased", "strongly increased"]
-            description += f" The patient's overall risk of developing {self.target} issues is {sentences.describe_contributions(individual.ser_metrics['total_risk_contribution'], thresholds=self.bins['total_risk_contribution'],words=words)} compared to other patients who come into the clinic."
-            if(individual.ser_metrics['total_risk_contribution'] > self.bins['total_risk_contribution'][1]):    
-                max_metric = max(
-                    {k: v for k, v in individual.ser_metrics.items() if k.endswith("_contribution") and k != "total_risk_contribution"},
-                    key=individual.ser_metrics.get 
-                )
-                max_metric = max_metric.replace("_contribution", "")
-                description += f" The highest contribution factor for developing {self.target} issues is the patient's {self.parameter_explanation[max_metric].lower()}."
-            description += f" The patient's risk of developing {self.target} issues is equivalent to that of a {calculated_age:.1f} year old."
-            # st.expander("Description with feature specific thresholds", expanded=False).write(description)
         return description
+    def describe_metric(self, metric, beta_age):
+        individual = self.individual
+        beta_feature = self.get_beta(metric)
+        value = individual.ser_metrics[metric]
+        
+        if self.categorical_interpretations and metric in self.categorical_interpretations:
+            # if categorical interpretation is available, look up the value in the interpretation dictionary
+            interperation = self.categorical_interpretations[metric].get(str(int(value)), value)
+            risk_increase = self.calcaulte_catergorical_risk_age_increase(beta_feature, beta_age)
+            text = f" {interperation} "
+        else:
+            # if no interpretation is available, just use the value
+            text = sentences.article(self.parameter_explanation[metric].lower()) + f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(value)} "
+            risk_increase = self.calculate_risk_age_increase(metric, value, beta_feature, beta_age)
+        
+        thresholds = self.thresholds if self.fixed_description else self.bins.get(f"{metric}_contribution", self.thresholds)        
+        words = [
+            "implies a strongly reduced risk",
+            "implies a moderately reduced risk",
+            "implies no significant effect",
+            "implies a moderately increased risk",
+            "implies a strongly increased risk"
+        ]
+        text +=sentences.describe_contributions(individual.ser_metrics[metric + "_contribution"], thresholds=thresholds, words=words)
+        text += f" of developing {self.target} issues."
+
+        effect = "decreases" if risk_increase < 0 else "increases"
+        risk_increase = abs(risk_increase)
+        if self.categorical_interpretations and metric in self.categorical_interpretations:
+            interperation = self.categorical_interpretations[metric].get(str(int(value)), value)
+            text += f" {interperation} "
+        else:
+            text+= sentences.article(self.parameter_explanation[metric].lower())+ f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(value)} "
+        text += f" {effect} your risk age by {sentences.format_numbers(risk_increase)} years. "
+        return text
+    
+    def describe_overall_risk(self, calculated_age):
+        individual = self.individual
+        words= ["strongly reduced", "moderately reduced", "average", "moderately increased", "strongly increased"]
+        text=(
+                        f" The patient's overall risk of developing {self.target} issues is "
+            f"{sentences.describe_contributions(individual.ser_metrics['total_risk_contribution'], thresholds=self.bins['total_risk_contribution'], words=words)} "
+            f"compared to other patients who come into the clinic."
+
+        )
+        if individual.ser_metrics['total_risk_contribution'] > self.bins['total_risk_contribution'][1]:
+            max_metric = max(
+                {k: v for k, v in individual.ser_metrics.items() if k.endswith("_contribution") and k != "total_risk_contribution"},
+                key=individual.ser_metrics.get 
+            )
+            max_metric = max_metric.replace("_contribution", "")
+            text += f" The highest contribution factor for developing {self.target} issues is the patient's {self.parameter_explanation[max_metric].lower()}."
+        text += f" The patient's risk of developing {self.target} issues is equivalent to that of a {calculated_age:.0f} year old."
+        return text
 
     def get_prompt_messages(self):
         prompt = (
@@ -825,40 +807,40 @@ class IndividualDescription(Description):
         )
         return [{"role": "user", "content": prompt}]
 
-    def calculate_risk_age(self, odds_space):
-        
-
-        model_features = self.model_features[['Parameter', 'Value']]
+    def calculate_risk_age(self):
         individual = self.individual
-        beta_age = model_features.loc[model_features['Parameter'] == 'age', 'Value'].values[0]
-
-        if odds_space:
-            other_feature_contributions = sum(
-            np.log(value) for key, value in individual.ser_metrics.items()
-            if key.endswith("_contribution") and key not in ["age_contribution", "total_risk_contribution"])   
-        else:
-            other_feature_contributions = sum(
-            value for key, value in individual.ser_metrics.items()
-            if key.endswith("_contribution") and key not in ["age_contribution", "total_risk_contribution"])   
+        beta_age = self.get_beta("age")
         
-        # Compute risk equivalent age
-        calucalted_risk_age= individual.ser_metrics['age'] + (other_feature_contributions/ beta_age)
+        total_contribution=0
 
-        # set the risk age between 28 and 100
-        if calucalted_risk_age < 33:
-            calucalted_risk_age = 33
-        elif calucalted_risk_age > 90:
-            calucalted_risk_age = 90
-        return calucalted_risk_age
-    
+        for param in self.model_features['Parameter']:
+            if param == 'age':
+                continue
+            if param not in individual.ser_metrics:
+                continue
+            contribution_param= individual.ser_metrics[param] * self.get_beta(param)
+            # center the contribution around 0
+            contribution_param-= (self.individuals[param] * self.get_beta(param)).mean()
+
+            total_contribution += contribution_param
+        
+        calucalted_risk_age= individual.ser_metrics['age'] + (total_contribution / beta_age)
+
+        return min(max(calucalted_risk_age, 33), 90)
+        # return calucalted_risk_age
+        
     def calculate_risk_age_increase(self,metric, feature_value, beta_feature, beta_age):
         # Calculate the increase in risk age based on the feature value and baseline feature value
-        df= self.individuals
-        baseline_feature_value = df[metric].mean()
+        feature_baseline = self.individuals[metric].mean()
+        return (feature_value - feature_baseline) * beta_feature / beta_age
         
-        risk_age_increase = (feature_value - baseline_feature_value) * beta_feature / beta_age
-        return risk_age_increase
     def calcaulte_catergorical_risk_age_increase(self, beta_category, beta_age):
         # Calculate the increase in risk age based on the feature value and baseline feature value
-        risk_age_increase = (beta_category) / beta_age
-        return risk_age_increase
+        return beta_category / beta_age
+        
+    
+    def get_beta(self, param):
+        """
+        Get the beta value for a given metric from the model features.
+        """
+        return self.model_features.loc[self.model_features['Parameter'] == param, 'Value'].values[0]

@@ -240,18 +240,14 @@ def setup_chat():
         # Now call the description class to get the summary of the player
         
         
-        st.markdown("##### **Approach 1: Contributionj​=xj​×βj​−Mean(Contributionj​)**")
+        st.markdown("##### **Approach 1: Contributionj​=xj​×βj​−Mean(Contributionj​) with one fixed threshold**")
         
         with st.expander("Description of the individual with one fixed threshold", expanded=False):
-            print(thresholds)
             description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True)
             
-            st.write("The thresholds values for the fixed description are",str(thresholds), "based on the most variable feature", model.std_contributions.idxmax())
+            # st.write("The thresholds values for the fixed description are",str(thresholds), "based on the most variable feature", model.std_contributions.idxmax())
             st.markdown("###### **Synthesized Text about individual:**")
             st.write(description.synthesized_text)
-            # Make a plot of the distribution of the metrics for all players
-            # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
-            # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
 
             visual = DistributionModelPlot(thresholds, x_range  ,metrics, model_features=model_features)
             visual.add_title('Evaluation of individual','')
@@ -262,6 +258,7 @@ def setup_chat():
             st.markdown("###### **Summary of the individual:**")
             st.write(summary)
             chat.state="empty"
+        st.markdown("##### **Approach 2: Contributionj​=xj​×βj​−Mean(Contributionj​) with multiple thresholds**")
         with st.expander("Description of the individual with feature specific thresholds", expanded=False):
             description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=False)
             st.markdown("###### **Synthesized Text about individual:**")
@@ -278,65 +275,65 @@ def setup_chat():
             st.markdown("###### **Summary of the individual:**")
             st.write(summary)
             chat.state="empty"
-        st.markdown("##### **Approach 2: Contributionj=e^xj​×βj​**")
-        with st.expander("Description of the individual with one fixed threshold", expanded=False):
-            model.weight_contributions(type='method-2')
-            # thresholds = model.most_variable_data() 
-            thresholds= [-15, -10, 10, 15]
-            bins=model.risk_thresholds()  
+        # st.markdown("##### **Approach 2: Contributionj=e^xj​×βj​**")
+        # with st.expander("Description of the individual with one fixed threshold", expanded=False):
+        #     model.weight_contributions(type='method-2')
+        #     # thresholds = model.most_variable_data() 
+        #     thresholds= [-15, -10, 10, 15]
+        #     bins=model.risk_thresholds()  
                 
-            individual_id = individual.id
+        #     individual_id = individual.id
             
-            individual_data = copy.deepcopy(model)
-            individual_data.df = individual_data.df[individual_data.df["ID"] == individual_id]
-            individual = individual_data.to_data_point( columns=["ID", st.session_state["target"]])
+        #     individual_data = copy.deepcopy(model)
+        #     individual_data.df = individual_data.df[individual_data.df["ID"] == individual_id]
+        #     individual = individual_data.to_data_point( columns=["ID", st.session_state["target"]])
             
-            description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True, odds_space=True)      
-            st.markdown("###### **Synthesized Text about individual:**")
-            st.write(description.synthesized_text)
-            # Make a plot of the distribution of the metrics for all players
-            # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
-            # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
-            visual = DistributionModelPlot(thresholds,[min(thresholds), max(thresholds)],metrics, model_features=model_features)
-            visual.add_title('Evaluation of individual','')
-            visual.add_individuals(model, metrics=metrics, target=target)
-            visual.add_individual(individual, len(model.df), metrics=metrics)
-            st.write(visual.show())
-            summary = description.stream_gpt()
-            st.markdown("###### **Summary of the individual:**")
-            st.write(summary)
-            chat.state="empty"
-        st.markdown("##### **Approach 3: Contributionj=e^xj​×βj​- mean(e^xj​×βj)**")
-        with st.expander("Description of the individual with one fixed threshold", expanded=False):
-            model.weight_contributions(type='method-3')
-            thresholds, x_range = model.calulcate_threshold() 
-            # thresholds= [-5, -2.5, 2.5, 5]
-            bins=model.risk_thresholds()  
+        #     description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True, odds_space=True)      
+        #     st.markdown("###### **Synthesized Text about individual:**")
+        #     st.write(description.synthesized_text)
+        #     # Make a plot of the distribution of the metrics for all players
+        #     # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
+        #     # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
+        #     visual = DistributionModelPlot(thresholds,[min(thresholds), max(thresholds)],metrics, model_features=model_features)
+        #     visual.add_title('Evaluation of individual','')
+        #     visual.add_individuals(model, metrics=metrics, target=target)
+        #     visual.add_individual(individual, len(model.df), metrics=metrics)
+        #     st.write(visual.show())
+        #     summary = description.stream_gpt()
+        #     st.markdown("###### **Summary of the individual:**")
+        #     st.write(summary)
+        #     chat.state="empty"
+        # st.markdown("##### **Approach 3: Contributionj=e^xj​×βj​- mean(e^xj​×βj)**")
+        # with st.expander("Description of the individual with one fixed threshold", expanded=False):
+        #     model.weight_contributions(type='method-3')
+        #     thresholds, x_range = model.calulcate_threshold() 
+        #     # thresholds= [-5, -2.5, 2.5, 5]
+        #     bins=model.risk_thresholds()  
                 
-            individual_id = individual.id
+        #     individual_id = individual.id
             
-            individual_data = copy.deepcopy(model)
-            individual_data.df = individual_data.df[individual_data.df["ID"] == individual_id]
-            individual = individual_data.to_data_point( columns=["ID", st.session_state["target"]])
+        #     individual_data = copy.deepcopy(model)
+        #     individual_data.df = individual_data.df[individual_data.df["ID"] == individual_id]
+        #     individual = individual_data.to_data_point( columns=["ID", st.session_state["target"]])
             
-            description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True, odds_space=True)      
-            st.markdown("###### **Synthesized Text about individual:**")
-            st.write(description.synthesized_text)
-            # Make a plot of the distribution of the metrics for all players
-            # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
-            # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
-            visual = DistributionModelPlot(thresholds,[min(thresholds), max(thresholds)],metrics, model_features=model_features)
-            visual.add_title('Evaluation of individual','')
-            visual.add_individuals(model, metrics=metrics, target=target)
-            visual.add_individual(individual, len(model.df), metrics=metrics, center=0)
-            st.write(visual.show())
-            summary = description.stream_gpt()
-            st.markdown("###### **Summary of the individual:**")
-            st.write(summary)
-            chat.state="empty"
+        #     description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True, odds_space=True)      
+        #     st.markdown("###### **Synthesized Text about individual:**")
+        #     st.write(description.synthesized_text)
+        #     # Make a plot of the distribution of the metrics for all players
+        #     # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
+        #     # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
+        #     visual = DistributionModelPlot(thresholds,[min(thresholds), max(thresholds)],metrics, model_features=model_features)
+        #     visual.add_title('Evaluation of individual','')
+        #     visual.add_individuals(model, metrics=metrics, target=target)
+        #     visual.add_individual(individual, len(model.df), metrics=metrics, center=0)
+        #     st.write(visual.show())
+        #     summary = description.stream_gpt()
+        #     st.markdown("###### **Summary of the individual:**")
+        #     st.write(summary)
+        #     chat.state="empty"
         
-        st.markdown("##### **Approach 4: Contributionj=e^(xj​×βj​- mean(xj​×βj))**")
-        with st.expander("Description of the individual with one fixed threshold", expanded=True):
+        st.markdown("##### **Approach 3 : Contributionj=e^(xj​×βj​- mean(xj​×βj))**")
+        with st.expander("Description of the individual with one fixed threshold", expanded=False):
             model.weight_contributions(type='method-4')
             thresholds, x_range = model.calulcate_threshold(odds_space=True) 
             # thresholds= [-5, -2.5, 2.5, 5]
@@ -366,7 +363,7 @@ def setup_chat():
             st.markdown("###### **Summary of the individual:**")
             st.write(summary)
             chat.state="empty"
-        st.markdown("##### **Approach 5: Contributionj(cont)=e^(xj​×βj​- mean(xj​×βj)) or Contributionj(categ)=e^(xj​×βj)**")
+        st.markdown("##### **Approach 4: Contributionj(cont)=e^(xj​×βj​- mean(xj​×βj)) or Contributionj(categ)=e^(xj​×βj)**")
         
         with st.expander("Description of the individual with one fixed threshold", expanded=False):
             model.weight_contributions(type='method-5')
@@ -395,34 +392,34 @@ def setup_chat():
             st.markdown("###### **Summary of the individual:**")
             st.write(summary)
             chat.state="empty"
-        st.markdown("##### **Approach 6: Contributionj=e^(xj​×βj)​/ mean(e^xj​×βj))**")
-        with st.expander("Description of the individual with one fixed threshold", expanded=False):
-            model.weight_contributions(type='method-6')
-            thresholds, x_range = model.calulcate_threshold(odds_space=True) 
-            # thresholds= [-5, -2.5, 2.5, 5]
-            bins=model.risk_thresholds()  
+        # st.markdown("##### **Approach 6: Contributionj=e^(xj​×βj)​/ mean(e^xj​×βj))**")
+        # with st.expander("Description of the individual with one fixed threshold", expanded=False):
+        #     model.weight_contributions(type='method-6')
+        #     thresholds, x_range = model.calulcate_threshold(odds_space=True) 
+        #     # thresholds= [-5, -2.5, 2.5, 5]
+        #     bins=model.risk_thresholds()  
                 
-            individual_id = individual.id
+        #     individual_id = individual.id
             
-            individual_data = copy.deepcopy(model)
-            individual_data.df = individual_data.df[individual_data.df["ID"] == individual_id]
-            individual = individual_data.to_data_point( columns=["ID", st.session_state["target"]])
+        #     individual_data = copy.deepcopy(model)
+        #     individual_data.df = individual_data.df[individual_data.df["ID"] == individual_id]
+        #     individual = individual_data.to_data_point( columns=["ID", st.session_state["target"]])
             
-            description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True, odds_space=True)      
-            st.markdown("###### **Synthesized Text about individual:**")
-            st.write(description.synthesized_text)
-            # Make a plot of the distribution of the metrics for all players
-            # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
-            # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
-            visual = DistributionModelPlot(thresholds,[min(thresholds), max(thresholds)],metrics, model_features=model_features)
-            visual.add_title('Evaluation of individual','')
-            visual.add_individuals(model, metrics=metrics, target=target)
-            visual.add_individual(individual, len(model.df), metrics=metrics, center=1)
-            st.write(visual.show())
-            summary = description.stream_gpt()
-            st.markdown("###### **Summary of the individual:**")
-            st.write(summary)
-            chat.state="empty"
+        #     description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True, odds_space=True)      
+        #     st.markdown("###### **Synthesized Text about individual:**")
+        #     st.write(description.synthesized_text)
+        #     # Make a plot of the distribution of the metrics for all players
+        #     # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
+        #     # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
+        #     visual = DistributionModelPlot(thresholds,[min(thresholds), max(thresholds)],metrics, model_features=model_features)
+        #     visual.add_title('Evaluation of individual','')
+        #     visual.add_individuals(model, metrics=metrics, target=target)
+        #     visual.add_individual(individual, len(model.df), metrics=metrics, center=1)
+        #     st.write(visual.show())
+        #     summary = description.stream_gpt()
+        #     st.markdown("###### **Summary of the individual:**")
+        #     st.write(summary)
+        #     chat.state="empty"
         # # Add the visual and summary to the chat
         # chat.add_message(
         #     "Please can you summarise this individual for me?",
