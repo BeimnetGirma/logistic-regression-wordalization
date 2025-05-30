@@ -736,12 +736,16 @@ class IndividualDescription(Description):
         description = f"Here is a statistical description of the factors related to {self.target} issues for the patient. \n\n "
 
         for metric in metrics:
-            description+= self.describe_metric(metric, beta_age)
+            description += (
+                self.describe_metric_odds_space(metric, beta_age)
+                if self.odds_space
+                else self.describe_metric_linear(metric, beta_age)
+            )
 
         description+= self.describe_overall_risk(calculated_age)
 
         return description
-    def describe_metric(self, metric, beta_age):
+    def describe_metric_linear(self, metric, beta_age):
         individual = self.individual
         beta_feature = self.get_beta(metric)
         value = individual.ser_metrics[metric]
@@ -767,14 +771,62 @@ class IndividualDescription(Description):
         text +=sentences.describe_contributions(individual.ser_metrics[metric + "_contribution"], thresholds=thresholds, words=words)
         text += f" of developing {self.target} issues."
 
-        effect = "decreases" if risk_increase < 0 else "increases"
-        risk_increase = abs(risk_increase)
+        if metric != "age":
+            effect = "decreases" if risk_increase < 0 else "increases"
+            risk_increase = abs(risk_increase)
+            if self.categorical_interpretations and metric in self.categorical_interpretations:
+                interperation = self.categorical_interpretations[metric].get(str(int(value)), value)
+                text += f" {interperation} "
+            else:
+                text+= sentences.article(self.parameter_explanation[metric].lower())+ f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(value)} "
+            text += f" {effect} your risk age by {sentences.format_numbers(risk_increase)} years. "
+        return text
+    
+    def describe_metric_odds_space(self, metric, beta_age):
+        individual = self.individual
+        beta_feature = self.get_beta(metric)
+        value = individual.ser_metrics[metric]
+        
         if self.categorical_interpretations and metric in self.categorical_interpretations:
+            # if categorical interpretation is available, look up the value in the interpretation dictionary
             interperation = self.categorical_interpretations[metric].get(str(int(value)), value)
-            text += f" {interperation} "
+            risk_increase = self.calcaulte_catergorical_risk_age_increase(beta_feature, beta_age)
+            text = f" {interperation} "
         else:
-            text+= sentences.article(self.parameter_explanation[metric].lower())+ f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(value)} "
-        text += f" {effect} your risk age by {sentences.format_numbers(risk_increase)} years. "
+            # if no interpretation is available, just use the value
+            text = sentences.article(self.parameter_explanation[metric].lower()) + f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(value)} "
+            risk_increase = self.calculate_risk_age_increase(metric, value, beta_feature, beta_age)
+        
+        # thresholds = self.thresholds if self.fixed_description else self.bins.get(f"{metric}_contribution", self.thresholds)        
+        # words = [
+        #     "implies a strongly reduced risk",
+        #     "implies a moderately reduced risk",
+        #     "implies no significant effect",
+        #     "implies a moderately increased risk",
+        #     "implies a strongly increased risk"
+        # ]
+        contribution = individual.ser_metrics[metric + "_contribution"]
+        if contribution>1:
+            percent_change= (contribution-1)*100
+            direction = "increases"
+        elif contribution<1:
+            percent_change= (1-contribution)*100
+            direction = "decreases"
+        else:
+            percent_change = 0
+            direction = "does not significantly affect"
+
+        #compose sentence
+        if percent_change == 0:
+            text += f"  does not significantly affect your risk of developing {self.target} issues."
+        else:
+            text += f"  {direction} your risk of developing {self.target} issues by {percent_change:.1f}% comapred to the average patient."
+
+
+        if metric != "age":
+            effect = "decreases" if risk_increase < 0 else "increases"
+            risk_increase = abs(risk_increase)
+            text+= f"This corresponds to a {sentences.format_numbers(risk_increase)} years {effect} in risk age. "
         return text
     
     def describe_overall_risk(self, calculated_age):

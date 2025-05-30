@@ -739,6 +739,7 @@ class Model(Data):
         most_variable_column= self.std_contributions.idxmax()
         most_variable_data = self.df[most_variable_column]
         mean, std = np.mean(most_variable_data),np.std(most_variable_data)
+        min_value, max_value = most_variable_data.min(), most_variable_data.max()
 
         
         # center= most_variable_data.mean()
@@ -787,7 +788,7 @@ class Model(Data):
         # print(f"Plot range: {most_variable_data.min()} {most_variable_data.max()} {range}")
         # print(f"Thresholds: {thresholds}")
         # print(f"Linear thresholds: {linear_thresholds}")
-        return thresholds, plot_range
+        return thresholds, plot_range, [min_value, max_value]
     def risk_thresholds(self):
         bins_dict = {}
         for col in self.df.columns:

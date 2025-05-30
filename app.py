@@ -208,7 +208,7 @@ def setup_chat():
     st.session_state["individual"] = individual
 
     # Gengerate Chat and Visualization
-    thresholds, x_range = model.calulcate_threshold() 
+    thresholds, x_range, min_max_range = model.calulcate_threshold() 
     # thresholds= [-5, -2.5, 2.5, 5]
     bins=model.risk_thresholds()           
     # st.write("The most variable feature is",model.std_contributions.idxmax())
@@ -249,7 +249,7 @@ def setup_chat():
             st.markdown("###### **Synthesized Text about individual:**")
             st.write(description.synthesized_text)
 
-            visual = DistributionModelPlot(thresholds, x_range  ,metrics, model_features=model_features)
+            visual = DistributionModelPlot(thresholds, min_max_range  ,metrics, model_features=model_features)
             visual.add_title('Evaluation of individual','')
             visual.add_individuals(model, metrics=metrics, target=target)
             visual.add_individual(individual, len(model.df), metrics=metrics)
@@ -266,7 +266,7 @@ def setup_chat():
             # Make a plot of the distribution of the metrics for all players
             # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
             # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
-            visual = DistributionModelPlot(thresholds, [min(thresholds), max(thresholds)],metrics, model_features=model_features)
+            visual = DistributionModelPlot(thresholds, [min(thresholds), max(thresholds)] ,metrics, model_features=model_features)
             visual.add_title('Evaluation of individual','')
             visual.add_individuals(model, metrics=metrics, target=target)
             visual.add_individual(individual, len(model.df), metrics=metrics)
@@ -335,7 +335,7 @@ def setup_chat():
         st.markdown("##### **Approach 3 : Contributionj=e^(xj​×βj​- mean(xj​×βj))**")
         with st.expander("Description of the individual with one fixed threshold", expanded=False):
             model.weight_contributions(type='method-4')
-            thresholds, x_range = model.calulcate_threshold(odds_space=True) 
+            thresholds, x_range, min_max_range = model.calulcate_threshold(odds_space=True) 
             # thresholds= [-5, -2.5, 2.5, 5]
             bins=model.risk_thresholds()  
                 
@@ -345,7 +345,7 @@ def setup_chat():
             individual_data.df = individual_data.df[individual_data.df["ID"] == individual_id]
             individual = individual_data.to_data_point( columns=["ID", st.session_state["target"]])
             
-            description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True, odds_space="True")      
+            description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True, odds_space=True)      
             st.markdown("###### **Synthesized Text about individual:**")
             st.write(description.synthesized_text)
             # Make a plot of the distribution of the metrics for all players
@@ -354,7 +354,7 @@ def setup_chat():
             
 
 
-            visual = DistributionModelPlot(thresholds,x_range,metrics, model_features=model_features)
+            visual = DistributionModelPlot(thresholds,min_max_range,metrics, model_features=model_features)
             visual.add_title('Evaluation of individual','')
             visual.add_individuals(model, metrics=metrics, target=target)
             visual.add_individual(individual, len(model.df), metrics=metrics, center=1)
@@ -367,7 +367,7 @@ def setup_chat():
         
         with st.expander("Description of the individual with one fixed threshold", expanded=False):
             model.weight_contributions(type='method-5')
-            thresholds, x_range = model.calulcate_threshold(odds_space=True)
+            thresholds, x_range, min_max_range = model.calulcate_threshold(odds_space=True)
             # thresholds= [-5, -2.5, 2.5, 5]
             bins=model.risk_thresholds()  
                 
