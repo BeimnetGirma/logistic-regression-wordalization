@@ -383,7 +383,7 @@ def setup_chat():
             # Make a plot of the distribution of the metrics for all players
             # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
             # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
-            visual = DistributionModelPlot(thresholds,[min(thresholds), max(thresholds)],metrics, model_features=model_features)
+            visual = DistributionModelPlot(thresholds,min_max_range,metrics, model_features=model_features)
             visual.add_title('Evaluation of individual','')
             visual.add_individuals(model, metrics=metrics, target=target)
             visual.add_individual(individual, len(model.df), metrics=metrics, center=1)
