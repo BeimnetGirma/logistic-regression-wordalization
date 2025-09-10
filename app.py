@@ -16,10 +16,44 @@ from utils.page_components import (
 
 
 from classes.visual import DistributionModelPlot
+from PIL import Image, ImageOps, ImageDraw
 # Set Streamlit page layout
 st.set_page_config(page_title="Logistic Regression App", layout="wide")
 
 # Sidebar with a link using `st.page_link`
+def add_white_round_bg(image_path, size=120):
+    img = Image.open(image_path).convert("RGBA")
+    # Resize image to fit inside the circle
+    img.thumbnail((size, size), Image.LANCZOS)
+    # Create white circle background
+    bg = Image.new("RGBA", (size, size), (255, 255, 255, 0))
+    mask = Image.new("L", (size, size), 0)
+    draw = ImageDraw.Draw(mask)
+    draw.ellipse((0, 0, size, size), fill=255)
+    bg.paste((255, 255, 255, 255), (0, 0), mask)
+    # Center the image on the circle
+    img_pos = ((size - img.width) // 2, (size - img.height) // 2)
+    bg.paste(img, img_pos, img)
+    return bg
+
+img_with_bg = add_white_round_bg("data/ressources/img/heart-sense.png", size=120)
+# Center the image in the sidebar using markdown and HTML
+import base64
+from io import BytesIO
+
+# Encode the image as PNG and then base64
+buffer = BytesIO()
+ImageOps.exif_transpose(img_with_bg).convert('RGBA').resize((120,120)).save(buffer, format="PNG")
+img_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+st.sidebar.markdown(
+    f"<div style='display: flex; justify-content: center; align-items: center;'>"
+    f"<img src='data:image/png;base64,{img_base64}' "
+    f"style='width:120px; height:120px; border-radius:60px; background:white;'/>"
+    f"</div>",
+    unsafe_allow_html=True
+)
+st.sidebar.divider()
 st.sidebar.page_link("app.py", label="Logistic Regression")
 
 
