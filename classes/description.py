@@ -714,7 +714,7 @@ class IndividualDescription(Description):
                 "role": "system",
                 "content": (
                     "You are doctor. "
-                    "You have been asked to provide a summary of a patient's risk of aneurysm. "
+                    "You have been asked to provide a summary of a patient's risk of developing cardio-vascular disease. "
                 ),
             },
         ]
@@ -734,7 +734,6 @@ class IndividualDescription(Description):
         calculated_age= self.calculate_risk_age()
         beta_age= self.get_beta("age")
         description = f"Here is a statistical description of the factors related to {self.target} issues for the patient. \n\n "
-
         for metric in metrics:
             description += (
                 self.describe_metric_odds_space(metric, beta_age)
@@ -792,19 +791,12 @@ class IndividualDescription(Description):
             interperation = self.categorical_interpretations[metric].get(str(int(value)), value)
             risk_increase = self.calcaulte_catergorical_risk_age_increase(beta_feature, beta_age)
             text = f" {interperation} "
+            
         else:
             # if no interpretation is available, just use the value
             text = sentences.article(self.parameter_explanation[metric].lower()) + f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(value)} "
             risk_increase = self.calculate_risk_age_increase(metric, value, beta_feature, beta_age)
         
-        # thresholds = self.thresholds if self.fixed_description else self.bins.get(f"{metric}_contribution", self.thresholds)        
-        # words = [
-        #     "implies a strongly reduced risk",
-        #     "implies a moderately reduced risk",
-        #     "implies no significant effect",
-        #     "implies a moderately increased risk",
-        #     "implies a strongly increased risk"
-        # ]
         contribution = individual.ser_metrics[metric + "_contribution"]
         if contribution>1:
             percent_change= (contribution-1)*100
@@ -820,9 +812,10 @@ class IndividualDescription(Description):
         if percent_change == 0:
             text += f"  does not significantly affect your risk of developing {self.target} issues."
         else:
-            text += f"  {direction} your risk of developing {self.target} issues by {percent_change:.1f}% comapred to the average patient."
-
-
+            text += f"  {direction} your risk of developing {self.target} issues by {percent_change:.1f}% compared to the average patient {self.get_average_value(metric)}. "
+        
+        
+        
         if metric != "age":
             effect = "decreases" if risk_increase < 0 else "increases"
             risk_increase = abs(risk_increase)
@@ -850,14 +843,34 @@ class IndividualDescription(Description):
 
     def get_prompt_messages(self):
         prompt = (
-            f"Please use the statistical description enclosed with ``` to give a concise summary of the patients health metrics focusing on factors that negatively and postively affect their risk of developing {self.target} issues. Use second person language to address the patient. "
-            f"The first sentence should use varied language to give an overview of the patients health status. "
-            "The second sentence should describe specific factors that descrease or reduce risks based on the metrics. "
-            "The third sentence should describe specific factors that increase the risk based on the metrics. "
-            "Finally, suggest what the patient can do to reduce their risk of developing {self.target} issues."
-            "Use varied language to describe how the different features contribute to the patient's overall risk."
+            f"Please use the statistical description enclosed with ``` to give a concise summary of the patients health metrics focusing on factors that negatively and postively affect their risk of developing {self.target} issues. Use second person language to address the patient. Write a concise, conversational paragraph (4-7 sentneces) that:"
+            f"1. Begins with a greeting and a summary of the user’s overall cardiovascular risk, including heart age if applicable. "
+            "2. Highlights protective or positive factors first (blood pressure, BMI, blood sugar, lifestyle habits, sex/age effects)."
+            "3. Explains the main risk factors, why they matter, and their impact on heart health."
+            "4. Offers practical guidance or next steps the user can take to reduce risk or maintain heart health"
+            "5. Uses an approachable, supportive, and professional tone — interpretive and evidence-based, but avoid speculation beyond the provided data."
+            "6. Refers to the user’s data directly in context, balances positives and negatives, and flows naturally like a short personal summary rather than a bulleted list."
         )
         return [{"role": "user", "content": prompt}]
+    
+    def get_average_value(self,param):
+        # Get the average value for a given parameter from the individuals dataframe
+        if self.categorical_interpretations and param in self.categorical_interpretations:
+            # if categorical interpretation is available, look up the value in the interpretation dictionary
+            mode_val= str(int(self.individuals[param].mode()[0]))
+            interpretation = self.categorical_interpretations[param].get(str(int(mode_val)), mode_val)
+            return self.naturalize_avg_description(interpretation)
+        else:
+            mean_val= self.individuals[param].mean()
+            return f"typically has an average value of {mean_val:.1f}"
+    def naturalize_avg_description(self,desc):
+        if desc.startswith("Being "):
+            return "who is " + desc.replace("Being ", "")
+        elif desc.startswith("Having "):
+            return "who has " + desc.replace("Having ", "")
+        elif desc.startswith("Not "):
+            return "who " + desc.lower()
+        return "who typically has " + desc.lower()
 
     def calculate_risk_age(self):
         individual = self.individual
