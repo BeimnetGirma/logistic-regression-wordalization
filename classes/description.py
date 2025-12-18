@@ -340,18 +340,6 @@ class CountryDescription(Description):
                     "You use the information given to you from the data and answers to earlier questions to give summaries of how countries score in various metrics that attempt to measure the social values held by the population of that country."
                 ),
             },
-            # {
-            #     "role": "user",
-            #     "content": "Do you refer to the game you are an expert in as soccer or football?",
-            # },
-            # {
-            #     "role": "assistant",
-            #     "content": (
-            #         "I refer to the game as football. "
-            #         "When I say football, I don't mean American football, I mean what Americans call soccer. "
-            #         "But I always talk about football, as people do in the United Kingdom."
-            #     ),
-            # },
         ]
         if len(self.describe_paths) > 0:
             intro += [
@@ -687,20 +675,31 @@ class IndividualDescription(Description):
     def describe_paths(self):
         return [f"{self.describe_base}/Anuerysm.xlsx"]
 
-    def __init__(self, individual: Individual,metrics,parameter_explanation, categorical_interpretations , thresholds, target, bins, model_features, individuals, fixed, odds_space=False):
-        self.metrics = metrics
+    def __init__(self, individual: Individual, metrics, parameter_explanation,
+                 categorical_interpretations, thresholds, target, bins,
+                 model_features, individuals, fixed, odds_space=False,
+                 risk_scale=None, log_linear_scale=None,
+                 risk_age=None, categorical_treatment=None): 
+
         self.individual = individual
+        self.metrics = metrics
         self.parameter_explanation = parameter_explanation
         self.categorical_interpretations = categorical_interpretations
         self.thresholds = thresholds
         self.target = target
         self.bins = bins
         self.model_features = model_features
-        self.individuals=individuals
-        self.fixed_description=fixed
-        self.odds_space=odds_space
+        self.individuals = individuals
+        self.fixed_description = fixed
+        self.odds_space = odds_space
+        self.risk_scale = risk_scale
+        self.log_linear_scale = log_linear_scale
+        self.risk_age = risk_age
+        self.categorical_treatment = categorical_treatment
+        
+        self.max_contribution = 1.0 # Default value
         super().__init__()
-
+    
 
     def get_intro_messages(self) -> List[Dict[str, str]]:
         """
@@ -713,27 +712,54 @@ class IndividualDescription(Description):
             {
                 "role": "system",
                 "content": (
-                    "You are doctor. "
-                    "You have been asked to provide a summary of a patient's risk of developing cardio-vascular disease. "
+                    "You are a doctor. "
+                    "You have been asked to provide a summary of a patient's risk of aneurysm."
                 ),
             },
         ]
         if len(self.describe_paths) > 0:
             intro += [
-                {
-                    "role": "user",
-                    "content": "First, could you answer some questions about medical details for me?",
-                },
+                {"role": "user", "content": "First, could you answer some questions about medical details for me?"},
                 {"role": "assistant", "content": "Sure!"},
             ]
-
         return intro
 
     def synthesize_text(self):
         metrics = self.metrics
-        calculated_age= self.calculate_risk_age()
-        beta_age= self.get_beta("age")
-        description = f"Here is a statistical description of the factors related to {self.target} issues for the patient. \n\n "
+        calculated_age = self.calculate_risk_age()
+        beta_age = self.get_beta("age")
+        
+        
+        contributions = {}
+        for metric in self.metrics:
+            if metric + "_contribution" in self.individual.ser_metrics:
+                
+                contributions[metric] = abs(self.individual.ser_metrics[metric + "_contribution"] - 1)
+        
+        if contributions:
+            
+            self.max_contribution = max(contributions.values())
+            
+            self.max_metric_name = max(contributions, key=contributions.get)
+        else:
+            self.max_contribution = 1.0
+            self.max_metric_name = "N/A"
+       
+        description = (
+            f"--- INTERPRETATION SETTINGS: Risk Scale: '{self.risk_scale}', "
+            f"Calculation Scale: '{self.log_linear_scale}', "
+            f"Risk Age Setting: '{self.risk_age}', "
+            f"Categorical Treatment: '{self.categorical_treatment}'. " # Included new setting
+        )
+        if self.risk_scale == "Highest feature":
+            # Add context for the highest feature for the LLM
+            description += f"Note: The feature with the largest absolute risk contribution is: '{self.parameter_explanation.get(self.max_metric_name, self.max_metric_name)}'. "
+        
+        description += "--- \n\n"
+        # --- END LLM CONTEXTUAL INTRODUCTION ---
+        
+        description += f"Here is a statistical description of the factors related to {self.target} issues for the patient. \n\n "
+
         for metric in metrics:
             description += (
                 self.describe_metric_odds_space(metric, beta_age)
@@ -741,21 +767,28 @@ class IndividualDescription(Description):
                 else self.describe_metric_linear(metric, beta_age)
             )
 
-        description+= self.describe_overall_risk(calculated_age)
-
+        description += self.describe_overall_risk(calculated_age)
         return description
+
     def describe_metric_linear(self, metric, beta_age):
         individual = self.individual
         beta_feature = self.get_beta(metric)
         value = individual.ser_metrics[metric]
         
+        risk_increase = 0 # Default initialization
+
         if self.categorical_interpretations and metric in self.categorical_interpretations:
-            # if categorical interpretation is available, look up the value in the interpretation dictionary
+            # Categorical feature
             interperation = self.categorical_interpretations[metric].get(str(int(value)), value)
-            risk_increase = self.calcaulte_catergorical_risk_age_increase(beta_feature, beta_age)
             text = f" {interperation} "
+            
+            if self.categorical_treatment == "Reference Type":
+                risk_increase = self.calculate_categorical_risk_age_increase_reference_type(beta_feature, beta_age)
+            else: # Default or "Average"
+                risk_increase = self.calcaulte_catergorical_risk_age_increase(beta_feature, beta_age)
+
         else:
-            # if no interpretation is available, just use the value
+            # Continuous feature
             text = sentences.article(self.parameter_explanation[metric].lower()) + f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(value)} "
             risk_increase = self.calculate_risk_age_increase(metric, value, beta_feature, beta_age)
         
@@ -770,15 +803,19 @@ class IndividualDescription(Description):
         text +=sentences.describe_contributions(individual.ser_metrics[metric + "_contribution"], thresholds=thresholds, words=words)
         text += f" of developing {self.target} issues."
 
-        if metric != "age":
+        # Only include risk age increase if risk_age setting is not 'Exclude'
+        if metric != "age" and self.risk_age != "Exclude":
             effect = "decreases" if risk_increase < 0 else "increases"
             risk_increase = abs(risk_increase)
+            
+            # Re-generate text prefix for clarity if it's a categorical feature, as the logic is slightly complex
             if self.categorical_interpretations and metric in self.categorical_interpretations:
-                interperation = self.categorical_interpretations[metric].get(str(int(value)), value)
-                text += f" {interperation} "
+                prefix = f" {interperation} "
             else:
-                text+= sentences.article(self.parameter_explanation[metric].lower())+ f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(value)} "
-            text += f" {effect} your risk age by {sentences.format_numbers(risk_increase)} years. "
+                prefix = sentences.article(self.parameter_explanation[metric].lower())+ f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(value)} "
+                
+            text += f" {prefix} {effect} your risk age by {sentences.format_numbers(risk_increase)} years. "
+            
         return text
     
     def describe_metric_odds_space(self, metric, beta_age):
@@ -786,37 +823,95 @@ class IndividualDescription(Description):
         beta_feature = self.get_beta(metric)
         value = individual.ser_metrics[metric]
         
+        risk_increase = 0 # Default initialization
+
         if self.categorical_interpretations and metric in self.categorical_interpretations:
-            # if categorical interpretation is available, look up the value in the interpretation dictionary
+            # Categorical feature
             interperation = self.categorical_interpretations[metric].get(str(int(value)), value)
-            risk_increase = self.calcaulte_catergorical_risk_age_increase(beta_feature, beta_age)
             text = f" {interperation} "
             
+            # --- START: NEW CATEGORICAL TREATMENT LOGIC ---
+            if self.categorical_treatment == "Reference Type":
+                # For odds space, the contribution needs to be re-centered around the average patient for the feature
+                # However, the percentage change needs to be calculated relative to the Reference Type (beta/0)
+                contribution = np.exp(beta_feature) # Odds ratio relative to Reference Type
+                text += f" compared to the reference group, "
+                
+            else: # Default or "Average"
+                contribution = individual.ser_metrics[metric + "_contribution"] # Odds ratio relative to Average patient
+            # --- END: NEW CATEGORICAL TREATMENT LOGIC ---
+            
         else:
-            # if no interpretation is available, just use the value
+            # Continuous feature
             text = sentences.article(self.parameter_explanation[metric].lower()) + f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(value)} "
+            contribution = individual.ser_metrics[metric + "_contribution"] # Odds ratio relative to Average patient
+        
+        # Calculate risk increase for Risk Age output (needed regardless of odds space scale)
+        if self.categorical_interpretations and metric in self.categorical_interpretations:
+            if self.categorical_treatment == "Reference Type":
+                risk_increase = self.calculate_categorical_risk_age_increase_reference_type(beta_feature, beta_age)
+            else:
+                risk_increase = self.calcaulte_catergorical_risk_age_increase(beta_feature, beta_age)
+        else:
             risk_increase = self.calculate_risk_age_increase(metric, value, beta_feature, beta_age)
-        
-        contribution = individual.ser_metrics[metric + "_contribution"]
-        if contribution>1:
-            percent_change= (contribution-1)*100
-            direction = "increases"
-        elif contribution<1:
-            percent_change= (1-contribution)*100
-            direction = "decreases"
-        else:
-            percent_change = 0
-            direction = "does not significantly affect"
 
-        #compose sentence
-        if percent_change == 0:
-            text += f"  does not significantly affect your risk of developing {self.target} issues."
+
+        # --- START OF RISK SCALE LOGIC (Applies to both categorical and continuous) ---
+        percent_change = 0
+        direction = "does not significantly affect"
+
+        if self.risk_scale == "Independent" or (self.categorical_interpretations and metric in self.categorical_interpretations and self.categorical_treatment == "Reference Type"):
+            # Use raw deviation from 1 (Average patient, or Reference Type)
+            
+            # Use 1 for the baseline if treating against reference type (odds ratio exp(beta) is relative to baseline 1)
+            # Otherwise use the average patient contribution from ser_metrics (already centered)
+            baseline = 1 if (self.categorical_interpretations and metric in self.categorical_interpretations and self.categorical_treatment == "Reference Type") else contribution
+            
+            raw_dev = contribution - baseline
+            
+            if abs(raw_dev) > 0.005: # Use a small threshold for significance
+                percent_change = abs(raw_dev) * 100
+                direction = "increases" if raw_dev > 0 else "decreases"
+            
+            # Compose sentence for Independent Scale / Reference Type
+            comparison_phrase = "the reference group" if (self.categorical_interpretations and metric in self.categorical_interpretations and self.categorical_treatment == "Reference Type") else "the average patient"
+            if percent_change == 0:
+                text += f"  does not significantly affect your risk of developing {self.target} issues."
+            else:
+                text += f"  {direction} your risk of developing {self.target} issues by {percent_change:.1f}% comapred to {comparison_phrase}."
+        
+        elif self.risk_scale == "Highest feature" and self.max_contribution > 0:
+            # Scale the deviation relative to the max contribution
+            feature_dev = contribution - 1
+            scaled_dev = feature_dev / self.max_contribution
+            
+            if abs(scaled_dev) > 0.01: # Use 1% of the max effect as a threshold
+                percent_change = abs(scaled_dev) * 100
+                direction = "increases" if scaled_dev > 0 else "decreases"
+
+            # Compose sentence for Highest Feature Scale
+            max_name = self.parameter_explanation.get(self.max_metric_name, self.max_metric_name)
+            if percent_change == 0:
+                text += f"  has almost no effect compared to the largest factor, {max_name}."
+            else:
+                text += f"  {direction} your risk by {percent_change:.1f}% relative to the largest contributing factor, {max_name}."
+
         else:
-            text += f"  {direction} your risk of developing {self.target} issues by {percent_change:.1f}% compared to the average patient {self.get_average_value(metric)}. "
-        
-        
-        
-        if metric != "age":
+            # Default to Average comparison if Average is selected and we haven't hit the Reference Type block
+            raw_dev = contribution - 1
+            if abs(raw_dev) > 0.005:
+                percent_change = abs(raw_dev) * 100
+                direction = "increases" if raw_dev > 0 else "decreases"
+
+            if percent_change == 0:
+                text += f"  does not significantly affect your risk of developing {self.target} issues."
+            else:
+                text += f"  {direction} your risk of developing {self.target} issues by {percent_change:.1f}% comapred to the average patient."
+        # --- END OF RISK SCALE LOGIC ---
+
+
+        # Only include risk age increase if risk_age setting is not 'Exclude'
+        if metric != "age" and self.risk_age != "Exclude":
             effect = "decreases" if risk_increase < 0 else "increases"
             risk_increase = abs(risk_increase)
             text+= f"This corresponds to a {sentences.format_numbers(risk_increase)} years {effect} in risk age. "
@@ -838,39 +933,29 @@ class IndividualDescription(Description):
             )
             max_metric = max_metric.replace("_contribution", "")
             text += f" The highest contribution factor for developing {self.target} issues is the patient's {self.parameter_explanation[max_metric].lower()}."
-        text += f" The patient's risk of developing {self.target} issues is equivalent to that of a {calculated_age:.0f} year old."
+        
+        # Only include risk age equivalent if risk_age setting is not 'Exclude'
+        if self.risk_age != "Exclude":
+            text += f" The patient's risk of developing {self.target} issues is equivalent to that of a {calculated_age:.0f} year old."
         return text
 
     def get_prompt_messages(self):
+        # --- MODIFIED PROMPT TO REINFORCE INSTRUCTION AND INCLUDE NEW SETTINGS ---
         prompt = (
-            f"Please use the statistical description enclosed with ``` to give a concise summary of the patients health metrics focusing on factors that negatively and postively affect their risk of developing {self.target} issues. Use second person language to address the patient. Write a concise, conversational paragraph (4-7 sentneces) that:"
-            f"1. Begins with a greeting and a summary of the user’s overall cardiovascular risk, including heart age if applicable. "
-            "2. Highlights protective or positive factors first (blood pressure, BMI, blood sugar, lifestyle habits, sex/age effects)."
-            "3. Explains the main risk factors, why they matter, and their impact on heart health."
-            "4. Offers practical guidance or next steps the user can take to reduce risk or maintain heart health"
-            "5. Uses an approachable, supportive, and professional tone — interpretive and evidence-based, but avoid speculation beyond the provided data."
-            "6. Refers to the user’s data directly in context, balances positives and negatives, and flows naturally like a short personal summary rather than a bulleted list."
+            f"STRICT INSTRUCTION: When providing the summary, ensure you **strictly follow** the 'Risk Scale', 'Calculation Scale', 'Risk Age Setting', and 'Categorical Treatment' provided at the beginning of the statistical description. "
+            f"For the Calculation Scale of '{self.log_linear_scale}', use language consistent with that scale (e.g., 'probability' for Linear Scale, or 'odds'/'percentage change' for Log Scale/Odds Space). "
+            f"If the 'Risk Age Setting' is 'Exclude', **do not mention** any risk age comparisons or risk age equivalents. "
+            f"If the 'Risk Scale' is 'Highest feature', ensure the language used for each factor's contribution **references the most influential factor** identified in the statistical description. "
+            f"If the 'Categorical Treatment' is 'Reference Type', ensure the language used for categorical features **references the baseline/reference category** (e.g., 'compared to non-smokers'). "
+            f"Please use the statistical description enclosed with ``` to give a concise summary of the patients health metrics focusing on factors that negatively and postively affect their risk of developing {self.target} issues. Use second person language to address the patient. "
+            f"The first sentence should use varied language to give an overview of the patients health status. "
+            "The second sentence should describe specific factors that descrease or reduce risks based on the metrics. "
+            "The third sentence should describe specific factors that increase the risk based on the metrics. "
+            "Finally, suggest what the patient can do to reduce their risk of developing {self.target} issues."
+            "Use varied language to describe how the different features contribute to the patient's overall risk."
         )
+        # --- END MODIFIED PROMPT ---
         return [{"role": "user", "content": prompt}]
-    
-    def get_average_value(self,param):
-        # Get the average value for a given parameter from the individuals dataframe
-        if self.categorical_interpretations and param in self.categorical_interpretations:
-            # if categorical interpretation is available, look up the value in the interpretation dictionary
-            mode_val= str(int(self.individuals[param].mode()[0]))
-            interpretation = self.categorical_interpretations[param].get(str(int(mode_val)), mode_val)
-            return self.naturalize_avg_description(interpretation)
-        else:
-            mean_val= self.individuals[param].mean()
-            return f"typically has an average value of {mean_val:.1f}"
-    def naturalize_avg_description(self,desc):
-        if desc.startswith("Being "):
-            return "who is " + desc.replace("Being ", "")
-        elif desc.startswith("Having "):
-            return "who has " + desc.replace("Having ", "")
-        elif desc.startswith("Not "):
-            return "who " + desc.lower()
-        return "who typically has " + desc.lower()
 
     def calculate_risk_age(self):
         individual = self.individual
@@ -901,8 +986,15 @@ class IndividualDescription(Description):
         
     def calcaulte_catergorical_risk_age_increase(self, beta_category, beta_age):
         # Calculate the increase in risk age based on the feature value and baseline feature value
+        # This formula (beta / beta_age) represents the risk age change relative to the average
+        # since model.weight_contributions likely adjusts the categorical feature beta
         return beta_category / beta_age
         
+    def calculate_categorical_risk_age_increase_reference_type(self, beta_category, beta_age):
+        # Calculate the risk age change relative to the Reference Type (which is beta 0/no effect)
+        # The unadjusted beta (coefficient) represents the change from the reference group.
+        # This assumes the beta_category returned by get_beta is the unadjusted coefficient.
+        return beta_category / beta_age
     
     def get_beta(self, param):
         """
