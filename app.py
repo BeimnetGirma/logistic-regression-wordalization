@@ -371,14 +371,14 @@ def setup_chat():
             risk_age=risk_age,
         )
         
-        if st.button("Export 24 configurations for this patient"):
+        if st.button("Generate 24 configurations for this patient"):
             with st.spinner("Generating 24 configurations (this may take a minute)..."):
                 df_result = export_configurations(model, individual=individual)
             with open('patient_export.xlsx', 'rb') as f:
                 st.download_button(
                     label="Download Excel",
                     data=f,
-                    file_name=f'patient_{individual.name}_configurations.xlsx',
+                    file_name=f'patient_{individual.id}_configurations.xlsx',
                     mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                 )
 

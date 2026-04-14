@@ -849,35 +849,8 @@ class Model(Data):
         mean, std = np.mean(most_variable_data),np.std(most_variable_data)
         min_value, max_value = most_variable_data.min(), most_variable_data.max()
 
-        
-        # center= most_variable_data.mean()
-        # distance_to_min=abs(center- most_variable_data.min())
-        # distance_to_max= abs(most_variable_data.max()-center)  
-        # max_distance=max(distance_to_min,distance_to_max)
-        # margin=0.01*max_distance
-        # plot_range= (center-max_distance-margin,center+max_distance+margin)
-        # plot_range= (most_variable_data.min(),most_variable_data.max())
-        # print(f"Plot range: {most_variable_data.min()} {most_variable_data.max()} {plot_range}")
-
-
         linear_thresholds = [round(mean + i * std, 2) for i in [-1, -0.5, 0.5, 1]]
         if odds_space:
-            # Convert to odds space
-            # log_data= np.exp(most_variable_data)
-            # log_std= np.std(log_data)
-            # thresholds= [round(np.exp(i * log_std), 2) for i in [-1, -0.5, 0.5, 1]]
-            # thresholds = [round(np.exp(i), 2) for i in linear_thresholds]
-
-            # just for approach 4
-
-            # df = self.df
-            
-            # for i,row in self.parameters.iterrows():
-            #     log_odds = df[row['Parameter']] * row['Value']
-            #     mean_log_odds = np.mean(log_odds)
-            #     std_log_odds = np.std(log_odds)
-            #     thresholds=[np.exp(mean_log_odds + i * std_log_odds) for i in [-1, -0.5, 0.5, 1]]
-
             log_thresholds = [-1, -0.5, 0.5, 1]
             thresholds = [round(np.exp(x), 2) for x in log_thresholds]
             plot_range=[thresholds[0], thresholds[-1]]
@@ -885,29 +858,7 @@ class Model(Data):
         else:
             thresholds = linear_thresholds
             plot_range= [thresholds[0], thresholds[-1]]
-        
-        # range = [0.2, 5]
-        # range= (most_variable_data.min(), most_variable_data.max())
-        # min_val = df['ap_hi_contribution'].min()
-        # max_val = df['ap_hi_contribution'].max()
-        # padding = 0.05 * (max_val - min_val)
-        # plot_range = [min_val, max_val ] 
-
-        # print(f"Plot range: {most_variable_data.min()} {most_variable_data.max()} {range}")
-        # print(f"Thresholds: {thresholds}")
-        # print(f"Linear thresholds: {linear_thresholds}")
         return thresholds, plot_range, [min_value, max_value]
-    # def risk_thresholds(self):
-    #     bins_dict = {}
-    #     for col in self.df.columns:
-    #         if 'contribution' in col:
-    #             # bins =  list(np.percentile(self.df[col], [10, 30, 70, 90])) 
-    #             # change to std based thresholds
-    #             bins = [round(self.df[col].mean() + i * self.df[col].std(), 2) for i in [-1, -0.5, 0.5, 1]]
-                
-    #             bins_dict[col] = bins
-    #     # print(bins_dict)
-    #     return bins_dict
 
     def risk_thresholds(self, odds_space=False):
         bins_dict = {}
