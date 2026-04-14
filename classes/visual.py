@@ -46,6 +46,10 @@ class Visual:
     dark_green = hex_to_rgb(
         "#002c1c"
     )  # hex_to_rgb(st.get_option("theme.secondaryBackgroundColor"))
+    offwhite_blue = hex_to_rgb("#F4F5F7")
+    offwhite= hex_to_rgb("#F7F7F7")  
+    negative_population= hex_to_rgb("#1777A3")
+    positive_population= hex_to_rgb("#C23B3B")
     medium_green = hex_to_rgb("#003821")
     bright_green = hex_to_rgb(
         "#00A938"
@@ -88,6 +92,7 @@ class Visual:
     def show(self):
         st.plotly_chart(
             self.fig,
+            key=self.key,
             config={"displayModeBar": False},
             height=500,
             use_container_width=True,
@@ -101,12 +106,12 @@ class Visual:
             autosize=True,
             height=500,
             margin=dict(l=side_margin, r=side_margin, b=70, t=top_margin, pad=pad),
-            paper_bgcolor=rgb_to_color(self.dark_green),
-            plot_bgcolor=rgb_to_color(self.dark_green),
+            paper_bgcolor=rgb_to_color(self.offwhite_blue),
+            plot_bgcolor=rgb_to_color(self.offwhite),
             legend=dict(
                 orientation="h",
                 font={
-                    "color": rgb_to_color(self.white),
+                    "color": rgb_to_color(self.black),
                     "family": "Gilroy-Light",
                     "size": 11 * self.font_size_multiplier,
                 },
@@ -120,7 +125,7 @@ class Visual:
             ),
             xaxis=dict(
                 tickfont={
-                    "color": rgb_to_color(self.white, 0.5),
+                    "color": rgb_to_color(self.black, 0.75),
                     "family": "Gilroy-Light",
                     "size": 12 * self.font_size_multiplier,
                 },
@@ -135,7 +140,7 @@ class Visual:
                 "text": f"<span style='font-size: {15*self.font_size_multiplier}px'>{title}</span><br>{subtitle}",
                 "font": {
                     "family": "Gilroy-Medium",
-                    "color": rgb_to_color(self.white),
+                    "color": rgb_to_color(self.black),
                     "size": 12 * self.font_size_multiplier,
                 },
                 "x": 0.05,
@@ -154,7 +159,7 @@ class Visual:
             text=text,
             showarrow=False,
             font={
-                "color": rgb_to_color(self.white, 0.5),
+                "color": rgb_to_color(self.black, 0.6),
                 "family": "Gilroy-Light",
                 "size": 12 * self.font_size_multiplier,
             },
@@ -163,6 +168,7 @@ class Visual:
     def show(self):
         st.plotly_chart(
             self.fig,
+            key=self.key,
             config={"displayModeBar": False},
             height=500,
             use_container_width=True,
@@ -178,7 +184,7 @@ class DistributionPlot(Visual):
         self.empty = True
         self.columns = columns
         self.marker_color = (
-            c for c in [Visual.white, Visual.bright_yellow, Visual.bright_blue]
+            c for c in [Visual.black, Visual.bright_yellow, Visual.bright_blue]
         )
         self.marker_shape = (s for s in ["square", "hexagon", "diamond"])
         super().__init__(*args, **kwargs)
@@ -215,11 +221,11 @@ class DistributionPlot(Visual):
             # only use 2 colors for the logistic regression chat plot
             if target in df_plot.columns:
                 marker_colors = [
-                    rgb_to_color(self.table_red, opacity=0.2) if val == 1 else rgb_to_color(self.bright_green, opacity=0.2)
+                    rgb_to_color(self.positive_population, opacity=0.4) if val == 1 else rgb_to_color(self.negative_population, opacity=0.4)
                     for val in df_plot[target]
                 ]
             else:
-                marker_colors = [rgb_to_color(self.bright_green, opacity=0.2)] * len(df_plot)
+                marker_colors = [rgb_to_color(self.bright_green, opacity=0.4)] * len(df_plot)
 
             self.fig.add_trace(
                 
@@ -259,8 +265,11 @@ class DistributionPlot(Visual):
             else:
                 metric_name = format_metric(col)
 
-            if target is not None and ser_plot[target] == 1:
-                color = self.table_red
+            if target is not None:
+                if ser_plot[target] == 1:
+                    color = self.positive_population
+                else:
+                    color = self.negative_population
 
             self.fig.add_trace(
                 go.Scatter(
@@ -268,10 +277,10 @@ class DistributionPlot(Visual):
                     y=[i],
                     mode="markers",
                     marker={
-                        "color": rgb_to_color(color, opacity=0.5),
-                        "size": 10,
+                        "color": rgb_to_color(color, opacity=0.8),
+                        "size": 12,
                         "symbol": marker,
-                        "line_width": 1.5,
+                        "line_width": 2,
                         "line_color": rgb_to_color(color),
                     },
                     hovertemplate="%{text}<br>" + temp_hover_string + "<extra></extra>",
@@ -285,7 +294,7 @@ class DistributionPlot(Visual):
 
             self.fig.add_annotation(
                 x=center, y=i + 0.4, text=f"<span style=''>{metric_name}: {ser_plot[col]:.2f} {annotation}</span>", showarrow=False,
-                font={"color": rgb_to_color(self.white), "family": "Gilroy-Light",
+                font={"color": rgb_to_color(self.black), "family": "Gilroy-Light",
                         "size": 12 * self.font_size_multiplier},
             )
 
@@ -366,7 +375,8 @@ class DistributionPlot(Visual):
 
 class DistributionModelPlot(DistributionPlot):
 
-    def __init__(self, thresolds, x_range, columns, model_features= None,   *args, **kwargs):
+    def __init__(self, thresolds, x_range, columns, model_features= None, key=None, *args, **kwargs):
+        self.key = key
         self.thresolds = thresolds
         self.model_features = model_features
         self.x_range = x_range
@@ -383,20 +393,33 @@ class DistributionModelPlot(DistributionPlot):
             fixedrange=True,
             tickmode="array",
             tickvals=self.thresolds,
-            ticktext=tick_labels
+            ticktext=tick_labels,
+            tickfont={
+                "color": rgb_to_color(self.black, 0.75),
+                "family": "Gilroy-Light",
+                "size": 11 * self.font_size_multiplier,
+            },
+            linecolor=rgb_to_color(self.gray),
+            tickcolor=rgb_to_color(self.gray),
         )
         for tick in self.thresolds:
             self.fig.add_shape(
-            type="line",
-            x0=tick,
-            y0=0,
-            x1=tick,
-            y1=1,
-            xref='x',
-            yref='paper',
-            line=dict(color=rgb_to_color(self.bright_green), width=1)
+                type="line",
+                x0=tick,
+                y0=0,
+                x1=tick,
+                y1=1,
+                xref='x',
+                yref='paper',
+                line=dict(color=rgb_to_color(self.gray, 0.5), width=1, dash="dot")
             )
-        self.fig.update_yaxes(showticklabels=False, fixedrange=True, gridcolor=rgb_to_color(self.medium_green), zerolinecolor=rgb_to_color(self.medium_green))
+        self.fig.update_yaxes(
+            showticklabels=False,
+            fixedrange=True,
+            gridcolor=rgb_to_color(self.light_gray),
+            zerolinecolor=rgb_to_color(self.light_gray),
+            linecolor=rgb_to_color(self.light_gray),
+        )
 
     def  add_individual(self, individual, n_group, metrics, target=None, center=0):
                 

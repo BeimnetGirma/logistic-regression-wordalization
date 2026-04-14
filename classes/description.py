@@ -162,7 +162,7 @@ class Description(ABC):
         messages += [
             {
                 "role": "user",
-                "content": f"Now do the same thing with the following 2 descriptions. : ```{self.synthesized_text}```",
+                "content": f"Now do the same thing with the following description. : ```{self.synthesized_text}```",
             }
         ]
         return messages
@@ -179,7 +179,7 @@ class Description(ABC):
             str
         """
 
-        st.write("Chat transcript:", self.messages)
+        # st.write("Chat transcript:", self.messages)
 
         if USE_GEMINI:
             import google.generativeai as genai
@@ -687,7 +687,7 @@ class IndividualDescription(Description):
     def describe_paths(self):
         return [f"{self.describe_base}/Anuerysm.xlsx"]
 
-    def __init__(self, individual: Individual,metrics,parameter_explanation, categorical_interpretations , thresholds, target, bins, model_features, individuals, fixed, odds_space=False):
+    def __init__(self, individual: Individual, metrics, parameter_explanation, categorical_interpretations, thresholds, target, bins, model_features, individuals, threshold_type, odds_space=False, risk_age=True):
         self.metrics = metrics
         self.individual = individual
         self.parameter_explanation = parameter_explanation
@@ -696,9 +696,10 @@ class IndividualDescription(Description):
         self.target = target
         self.bins = bins
         self.model_features = model_features
-        self.individuals=individuals
-        self.fixed_description=fixed
-        self.odds_space=odds_space
+        self.individuals = individuals
+        self.threshold_type = threshold_type
+        self.odds_space = odds_space
+        self.risk_age = risk_age
         super().__init__()
 
 
@@ -759,7 +760,16 @@ class IndividualDescription(Description):
             text = sentences.article(self.parameter_explanation[metric].lower()) + f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(value)} "
             risk_increase = self.calculate_risk_age_increase(metric, value, beta_feature, beta_age)
         
-        thresholds = self.thresholds if self.fixed_description else self.bins.get(f"{metric}_contribution", self.thresholds)        
+        # if(self.threshold_type == "average"):
+        avg = np.array(list(self.bins.values())).mean(axis=0).tolist() 
+        
+        thresholds = (
+    self.thresholds
+    if self.threshold_type == "highest"
+    else self.bins.get(f"{metric}_contribution", self.thresholds)
+    if self.threshold_type == "feature_specific"
+    else avg
+)
         words = [
             "implies a strongly reduced risk",
             "implies a moderately reduced risk",
@@ -770,7 +780,7 @@ class IndividualDescription(Description):
         text +=sentences.describe_contributions(individual.ser_metrics[metric + "_contribution"], thresholds=thresholds, words=words)
         text += f" of developing {self.target} issues."
 
-        if metric != "age":
+        if metric != "age" and self.risk_age:
             effect = "decreases" if risk_increase < 0 else "increases"
             risk_increase = abs(risk_increase)
             if self.categorical_interpretations and metric in self.categorical_interpretations:
@@ -816,7 +826,8 @@ class IndividualDescription(Description):
         
         
         
-        if metric != "age":
+        if metric != "age" and self.risk_age:
+            print("Printing ********\n*********** age sentnece", self.risk_age)
             effect = "decreases" if risk_increase < 0 else "increases"
             risk_increase = abs(risk_increase)
             text+= f"This corresponds to a {sentences.format_numbers(risk_increase)} years {effect} in risk age. "
@@ -838,7 +849,8 @@ class IndividualDescription(Description):
             )
             max_metric = max_metric.replace("_contribution", "")
             text += f" The highest contribution factor for developing {self.target} issues is the patient's {self.parameter_explanation[max_metric].lower()}."
-        text += f" The patient's risk of developing {self.target} issues is equivalent to that of a {calculated_age:.0f} year old."
+        if self.risk_age:
+            text += f" The patient's risk of developing {self.target} issues is equivalent to that of a {calculated_age:.0f} year old."
         return text
 
     def get_prompt_messages(self):

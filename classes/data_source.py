@@ -672,6 +672,64 @@ class Model(Data):
 
     #     self.df = df
     
+    # def weight_contributions(self, type='method-1'):
+        
+    #     df = self.df
+        
+    #     parameters = self.parameters
+    #     for i,row in self.parameters.iterrows():
+    #         # # Standardize the data
+    #         # df[row['Parameter']] = (df[row['Parameter']] - df[row['Parameter']].mean()) 
+    #         if type == 'method-1':
+    #             #  Contributionj​=xj​×βj​−Mean(Contributionj​)
+    #             df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
+    #             #Remove the mean
+    #             df[row['Parameter']+'_contribution'] = df[row['Parameter']+'_contribution'] - df[row['Parameter']+'_contribution'].mean()
+    #         elif type == 'method-2':    
+    #             #Calculate Odds Ration
+    #             df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
+    #             df[row['Parameter']+'_contribution'] = np.exp(df[row['Parameter']+'_contribution'])
+    #         elif type == 'method-3':
+    #             #Calculate Odds Ration
+    #             df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
+    #             df[row['Parameter']+'_contribution'] = np.exp(df[row['Parameter']+'_contribution'])
+    #             # #Standardize the data
+    #             df[row['Parameter']+'_contribution'] = (df[row['Parameter']+'_contribution'] - df[row['Parameter']+'_contribution'].mean())
+    #             # # #Remove the mean
+    #             # df[row['Parameter']+'_contribution'] = df[row['Parameter']+'_contribution'] - df[row['Parameter']+'_contribution'].mean()
+    #         elif type == 'method-4':
+    #             #  Contributionj=e^(xj​×βj​- mean(xj​×βj))
+    #             df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
+    #             #Remove the mean
+    #             df[row['Parameter']+'_contribution'] = df[row['Parameter']+'_contribution'] - df[row['Parameter']+'_contribution'].mean()
+    #             df[row['Parameter']+'_contribution'] = np.exp(df[row['Parameter']+'_contribution'])
+                
+
+    #         elif type == 'method-5':
+    #             #  Contributionj=e^(xj​×βj​- mean(xj​×βj)) except for categorical fetures where Contributionj=e^(xj​×βj)
+    #             if row['Parameter'] in self.categorical_interpretations:
+    #                 df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
+    #                 df[row['Parameter']+'_contribution'] = np.exp(df[row['Parameter']+'_contribution'])
+    #             else:
+    #                 df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
+    #                 #Remove the mean
+    #                 df[row['Parameter']+'_contribution'] = df[row['Parameter']+'_contribution'] - df[row['Parameter']+'_contribution'].mean()
+    #                 df[row['Parameter']+'_contribution'] = np.exp(df[row['Parameter']+'_contribution'])
+    #         elif type == 'method-6':
+    #             #  Contributionj=e^(xj​×βj)/ mean(e^xj​×βj)) 
+    #             df[row['Parameter']+'_contribution'] = df[row['Parameter']] * row['Value']
+    #             df[row['Parameter']+'_contribution'] = np.exp(df[row['Parameter']+'_contribution'])
+    #             # Divide by mean
+    #             df[row['Parameter']+'_contribution'] = df[row['Parameter']+'_contribution'] / df[row['Parameter']+'_contribution'].mean()
+
+
+    #     self.parameter_explanation = parameters.set_index('Parameter')['Explanation'].to_dict()
+
+    #     self.df = df
+        
+    #     # total risk 
+    #     df['total_risk_contribution'] = df[[col for col in df.columns if '_contribution' in col]].sum(axis=1)
+
     def weight_contributions(self, type='method-1'):
         
         df = self.df
@@ -730,7 +788,57 @@ class Model(Data):
         # total risk 
         df['total_risk_contribution'] = df[[col for col in df.columns if '_contribution' in col]].sum(axis=1)
 
+
+    def weight_contributions(self, scale='linear', baseline='population'):
+        df = self.df
         
+        for i, row in self.parameters.iterrows():
+            raw = df[row['Parameter']] * row['Value']
+            is_categorical = row['Parameter'] in self.categorical_interpretations
+            
+            if scale == 'linear':
+                if baseline == 'population':
+                    # Same formula for both — mean-centring works for continuous
+                    # AND for categorical (mean is just the prevalence × β)
+                    df[row['Parameter'] + '_contribution'] = raw - raw.mean()
+                    
+                elif baseline == 'specific':
+                    if is_categorical:
+                        # Reference category scores exactly 0
+                        # e.g. female=0*β=0, male=1*β=β — no centring
+                        df[row['Parameter'] + '_contribution'] = raw
+                    else:
+                        # Continuous has no reference group — population average is
+                        # the only meaningful anchor, so we still centre
+                        df[row['Parameter'] + '_contribution'] = raw - raw.mean()
+                    
+            elif scale == 'odds':
+                if baseline == 'population':
+                    if is_categorical:
+                        # Population average for categorical:
+                        # e^(x·β - mean(x·β)) — mean is prevalence-weighted
+                        df[row['Parameter'] + '_contribution'] = np.exp(raw - raw.mean())
+                    else:
+                        # method-4: same formula for continuous
+                        df[row['Parameter'] + '_contribution'] = np.exp(raw - raw.mean())
+                        
+                elif baseline == 'specific':
+                    if is_categorical:
+                        # method-2/5: e^(x·β) — reference category scores exp(0)=1
+                        df[row['Parameter'] + '_contribution'] = np.exp(raw)
+                    else:
+                        # Continuous with specific baseline is ambiguous —
+                        # no reference group exists, so fall back to population average
+                        df[row['Parameter'] + '_contribution'] = np.exp(raw - raw.mean()) 
+
+
+        self.parameter_explanation = self.parameters.set_index('Parameter')['Explanation'].to_dict()
+
+        self.df = df
+
+        # total risk 
+        df['total_risk_contribution'] = df[[col for col in df.columns if '_contribution' in col]].sum(axis=1)
+
 
     def calulcate_threshold(self, odds_space=False):
         df = self.df
@@ -789,15 +897,37 @@ class Model(Data):
         # print(f"Thresholds: {thresholds}")
         # print(f"Linear thresholds: {linear_thresholds}")
         return thresholds, plot_range, [min_value, max_value]
-    def risk_thresholds(self):
+    # def risk_thresholds(self):
+    #     bins_dict = {}
+    #     for col in self.df.columns:
+    #         if 'contribution' in col:
+    #             # bins =  list(np.percentile(self.df[col], [10, 30, 70, 90])) 
+    #             # change to std based thresholds
+    #             bins = [round(self.df[col].mean() + i * self.df[col].std(), 2) for i in [-1, -0.5, 0.5, 1]]
+                
+    #             bins_dict[col] = bins
+    #     # print(bins_dict)
+    #     return bins_dict
+
+    def risk_thresholds(self, odds_space=False):
         bins_dict = {}
         for col in self.df.columns:
-            if 'contribution' in col:
-                bins =  list(np.percentile(self.df[col], [10, 30, 70, 90])) 
-                # print(f"{col}:")
-                # print(f"  Bins: {bins}")    
+            if 'contribution' in col: 
+                data = self.df[col]
+                
+                if odds_space:
+                    # Work in log space, then exponentiate back
+                    # Assumes contributions are already in odds space (positive, multiplicative)
+                    log_data = np.log(data.clip(lower=1e-9))  # guard against log(0)
+                    log_mean = log_data.mean()
+                    log_std = log_data.std()
+                    bins = [round(np.exp(log_mean + i * log_std), 4) 
+                            for i in [-1, -0.5, 0.5, 1]]
+                else:
+                    mean, std = data.mean(), data.std()
+                    bins = [round(mean + i * std, 4) for i in [-1, -0.5, 0.5, 1]]
+                
                 bins_dict[col] = bins
-        # print(bins_dict)
         return bins_dict
         
 

@@ -19,7 +19,75 @@ from classes.visual import DistributionModelPlot
 from PIL import Image, ImageOps, ImageDraw
 # Set Streamlit page layout
 st.set_page_config(page_title="Logistic Regression App", layout="wide")
+def export_configurations(model, individual, output_path='patient_export.xlsx'):
+    from itertools import product
+    import pandas as pd
+    from openpyxl.styles import Alignment
 
+    axes = {
+        'scale':     ['linear', 'odds'],
+        'reference': ['independent', 'largest', 'population'],
+        'risk_age':  [False, True],
+        'baseline':  ['specific', 'population']
+    }
+
+    rows = []
+    for config_idx, config_values in enumerate(product(*axes.values())):
+        config = dict(zip(axes.keys(), config_values))
+
+        model.weight_contributions(scale=config['scale'], baseline=config['baseline'])
+
+        description = IndividualDescription(
+            individual,
+            metrics= model.parameters['Parameter'],
+            parameter_explanation       = model.parameter_explanation,
+            categorical_interpretations = categorical_interpretations,
+            thresholds                  = model.calulcate_threshold(odds_space=(config['scale'] == 'odds'))[0],
+            target                      = target,
+            bins                        = model.risk_thresholds(odds_space=(config['scale'] == 'odds')),
+            model_features              = model_features,
+            individuals                 = model.df,
+            threshold_type              = 'feature_specific' if config['reference'] == 'independent' else ('highest' if config['reference'] == 'largest' else 'average'),
+            odds_space                  = (config['scale'] == 'odds'),
+            risk_age                    = config['risk_age'],
+        )
+
+        #  parameter_explanation=model.parameter_explanation,
+        #     categorical_interpretations=categorical_interpretations,
+        #     thresholds=thresholds,
+        #     target=target,
+        #     bins=bins,
+        #     model_features=model_features,
+        #     individuals=model.df,
+        #     threshold_type=threshold_type,
+        #     odds_space=odds_space,
+        #     risk_age=risk_age,
+
+        rows.append({
+            'config_id':        config_idx + 1,
+            'scale':            config['scale'],
+            'reference':        config['reference'],
+            'risk_age':         config['risk_age'],
+            'baseline':         config['baseline'],
+            'synthesized_text': description.synthesized_text,
+            'llm_summary':      description.stream_gpt(),
+        })
+        print(f"Config {config_idx+1}/24 done")
+
+    df_export = pd.DataFrame(rows)
+
+    with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+        df_export.to_excel(writer, sheet_name='Configurations', index=False)
+        ws = writer.sheets['Configurations']
+        for col_idx, col_name in enumerate(df_export.columns, 1):
+            col_letter = ws.cell(1, col_idx).column_letter
+            ws.column_dimensions[col_letter].width = 80 if 'text' in col_name or 'summary' in col_name else 14
+        for row in ws.iter_rows(min_row=2):
+            for cell in row:
+                cell.alignment = Alignment(wrap_text=True, vertical='top')
+
+    print(f"Exported to {output_path}")
+    return df_export
 # Sidebar with a link using `st.page_link`
 def add_white_round_bg(image_path, size=120):
     img = Image.open(image_path).convert("RGBA")
@@ -210,7 +278,7 @@ def setup_data(data, model_features, categorical_interpretations=None, target=No
     model=Model()
     model.set_data(data.head(90), model_features, categorical_interpretations=categorical_interpretations)
     model.process_data()
-    model.weight_contributions()
+    # model.weight_contributions()
     # bins=model.risk_thresholds()
     
 
@@ -225,246 +293,108 @@ def setup_data(data, model_features, categorical_interpretations=None, target=No
     st.success("Model data is processed! Go to the 'Chat' tab to select an individual.")
     
 def setup_chat():
-    model=st.session_state["model"]
-    # # Now select the focal player
-    # columns = ["ID", target]
-    # individual = select_individual(sidebar_container, model, columns=columns)
+    model = st.session_state["model"]
 
-    # select individual
-    # individual_ids= model.df['ID'].unique().tolist()
-    # selected_individual_id = st.selectbox("Select individual", individual_ids)
-    # process selected individual
-    individuals_copy=copy.deepcopy(model) 
-    individuals_copy.select_and_filter(column_name="ID",
-            label="Select Individual",)
-    individual=individuals_copy.to_data_point(columns=["ID", st.session_state["target"]])
+    # Select individual — capture ID before to_data_point drops the column
+    individuals_copy = copy.deepcopy(model)
+    individuals_copy.select_and_filter(column_name="ID", label="Select Individual")
+    individual_id = individuals_copy.df['ID'].iloc[0]
 
+    metrics = model.parameters['Parameter']
+
+    # Define axes explicitly
+    AXES = {
+        "scale": {"log_odds": "Log-odds", "odds_ratio": "Odds Ratio / % Change"},
+        "reference": {"independent": "Independent", "largest": "Relative to Largest", "average": "Relative to Average"},
+        "risk_age": {"yes": "Include Risk-Age", "no": "Exclude Risk-Age"},
+        "baseline": {"specific": "Specific Group", "population": "Population Average"}
+    }
+
+    st.sidebar.header("Configuration")
+    scale     = st.sidebar.radio("Scale", list(AXES["scale"].values()))
+    reference = st.sidebar.radio("Risk Reference", list(AXES["reference"].values()))
+    risk_age  = st.sidebar.toggle("Include Risk-Age Mapping")
+    baseline  = st.sidebar.radio("Categorical Baseline", list(AXES["baseline"].values()))
+
+    # Map config → weight method and odds_space flag
+    odds_space = (scale == "Odds Ratio / % Change")
+    # if not odds_space:
+    #     weight_method = 'method-1'
+    # elif baseline == "Population Average":
+    #     weight_method = 'method-4'
+    # else:  # "Specific Group"
+    #     weight_method = 'method-5'
+
+    if not odds_space:
+        weight_method = 'method-1'  
+    else:
+        weight_method= 'method-4'
+
+    threshold_type_map = {
+        "Independent": "feature_specific",
+        "Relative to Largest": "highest",
+        "Relative to Average": "average",
+    }
+    threshold_type = threshold_type_map[reference]
+
+    # Apply contributions and compute thresholds for the current config
+    # model.weight_contributions(type=weight_method)
+    scale_param = 'odds' if scale == "Odds Ratio / % Change" else 'linear'
+    baseline_param = 'specific' if baseline == "Specific Group" else 'population'
+
+    model.weight_contributions(scale=scale_param, baseline=baseline_param)
+    thresholds, x_range, min_max_range = model.calulcate_threshold(odds_space=odds_space)
+    bins = model.risk_thresholds(odds_space=odds_space)
+
+    # Recreate individual from the updated model so contributions reflect current config
+    individual_data = copy.deepcopy(model)
+    individual_data.df = individual_data.df[individual_data.df["ID"] == individual_id]
+    individual = individual_data.to_data_point(columns=["ID", st.session_state["target"]])
     st.session_state["individual"] = individual
 
-    # Gengerate Chat and Visualization
-    thresholds, x_range, min_max_range = model.calulcate_threshold() 
-    # thresholds= [-5, -2.5, 2.5, 5]
-    bins=model.risk_thresholds()           
-    # st.write("The most variable feature is",model.std_contributions.idxmax())
-    # st.write("The thresholds values for the fixed description are",str(thresholds), "based on the most variable feature", model.std_contributions.idxmax())
-    # st.write("The bins value are",str(bins))
-
-    # Chat state hash determines whether or not we should load a new chat or continue an old one
-    # We can add or remove variables to this hash to change conditions for loading a new chat
     to_hash = (individual.id,)
-    # Now create the chat as type PlayerChat
     chat = create_chat(to_hash, ModelChat, individual, model)
-
-    metrics =  model.parameters['Parameter']
 
     # Now we want to add basic content to chat if it's empty
     if chat.state == "empty":
-
-        # Make a plot of the distribution of the metrics for all players
-        # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
-        # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
-        # visual = DistributionModelPlot(thresholds,metrics, model_features=model_features)
-        # visual.add_title('Evaluation of individual','')
-        # visual.add_individuals(model, metrics=metrics, target=target)
-        # visual.add_individual(individual, len(model.df), metrics=metrics)
-
-        # visual= RidgelinePlot(model.df, metrics=metrics, target=target, individual_data=individual)
-        # visual.plot_population()
-
-        # Now call the description class to get the summary of the player
+        description = IndividualDescription(
+            individual, metrics,
+            parameter_explanation=model.parameter_explanation,
+            categorical_interpretations=categorical_interpretations,
+            thresholds=thresholds,
+            target=target,
+            bins=bins,
+            model_features=model_features,
+            individuals=model.df,
+            threshold_type=threshold_type,
+            odds_space=odds_space,
+            risk_age=risk_age,
+        )
         
-        
-        st.markdown("##### **Approach 1: Contributionj​=xj​×βj​−Mean(Contributionj​) with one fixed threshold**")
-        
-        with st.expander("Description of the individual with one fixed threshold", expanded=False):
-            description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True)
-            
-            # st.write("The thresholds values for the fixed description are",str(thresholds), "based on the most variable feature", model.std_contributions.idxmax())
-            st.markdown("###### **Synthesized Text about individual:**")
-            st.write(description.synthesized_text)
-
-            visual = DistributionModelPlot(thresholds, min_max_range  ,metrics, model_features=model_features)
-            visual.add_title('Evaluation of individual','')
-            visual.add_individuals(model, metrics=metrics, target=target)
-            visual.add_individual(individual, len(model.df), metrics=metrics)
-            st.write(visual.show())
-            summary = description.stream_gpt()
-            st.markdown("###### **Summary of the individual:**")
-            st.write(summary)
-            chat.state="empty"
-        st.markdown("##### **Approach 2: Contributionj​=xj​×βj​−Mean(Contributionj​) with multiple thresholds**")
-        with st.expander("Description of the individual with feature specific thresholds", expanded=False):
-            description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=False)
-            st.markdown("###### **Synthesized Text about individual:**")
-            st.write(description.synthesized_text)
-            # Make a plot of the distribution of the metrics for all players
-            # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
-            # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
-            visual = DistributionModelPlot(thresholds, [min(thresholds), max(thresholds)] ,metrics, model_features=model_features)
-            visual.add_title('Evaluation of individual','')
-            visual.add_individuals(model, metrics=metrics, target=target)
-            visual.add_individual(individual, len(model.df), metrics=metrics)
-            st.write(visual.show())
-            summary = description.stream_gpt()
-            st.markdown("###### **Summary of the individual:**")
-            st.write(summary)
-            chat.state="empty"
-        # st.markdown("##### **Approach 2: Contributionj=e^xj​×βj​**")
-        # with st.expander("Description of the individual with one fixed threshold", expanded=False):
-        #     model.weight_contributions(type='method-2')
-        #     # thresholds = model.most_variable_data() 
-        #     thresholds= [-15, -10, 10, 15]
-        #     bins=model.risk_thresholds()  
-                
-        #     individual_id = individual.id
-            
-        #     individual_data = copy.deepcopy(model)
-        #     individual_data.df = individual_data.df[individual_data.df["ID"] == individual_id]
-        #     individual = individual_data.to_data_point( columns=["ID", st.session_state["target"]])
-            
-        #     description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True, odds_space=True)      
-        #     st.markdown("###### **Synthesized Text about individual:**")
-        #     st.write(description.synthesized_text)
-        #     # Make a plot of the distribution of the metrics for all players
-        #     # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
-        #     # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
-        #     visual = DistributionModelPlot(thresholds,[min(thresholds), max(thresholds)],metrics, model_features=model_features)
-        #     visual.add_title('Evaluation of individual','')
-        #     visual.add_individuals(model, metrics=metrics, target=target)
-        #     visual.add_individual(individual, len(model.df), metrics=metrics)
-        #     st.write(visual.show())
-        #     summary = description.stream_gpt()
-        #     st.markdown("###### **Summary of the individual:**")
-        #     st.write(summary)
-        #     chat.state="empty"
-        # st.markdown("##### **Approach 3: Contributionj=e^xj​×βj​- mean(e^xj​×βj)**")
-        # with st.expander("Description of the individual with one fixed threshold", expanded=False):
-        #     model.weight_contributions(type='method-3')
-        #     thresholds, x_range = model.calulcate_threshold() 
-        #     # thresholds= [-5, -2.5, 2.5, 5]
-        #     bins=model.risk_thresholds()  
-                
-        #     individual_id = individual.id
-            
-        #     individual_data = copy.deepcopy(model)
-        #     individual_data.df = individual_data.df[individual_data.df["ID"] == individual_id]
-        #     individual = individual_data.to_data_point( columns=["ID", st.session_state["target"]])
-            
-        #     description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True, odds_space=True)      
-        #     st.markdown("###### **Synthesized Text about individual:**")
-        #     st.write(description.synthesized_text)
-        #     # Make a plot of the distribution of the metrics for all players
-        #     # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
-        #     # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
-        #     visual = DistributionModelPlot(thresholds,[min(thresholds), max(thresholds)],metrics, model_features=model_features)
-        #     visual.add_title('Evaluation of individual','')
-        #     visual.add_individuals(model, metrics=metrics, target=target)
-        #     visual.add_individual(individual, len(model.df), metrics=metrics, center=0)
-        #     st.write(visual.show())
-        #     summary = description.stream_gpt()
-        #     st.markdown("###### **Summary of the individual:**")
-        #     st.write(summary)
-        #     chat.state="empty"
-        
-        st.markdown("##### **Approach 3 : Contributionj=e^(xj​×βj​- mean(xj​×βj))**")
-        with st.expander("Description of the individual with one fixed threshold", expanded=False):
-            model.weight_contributions(type='method-4')
-            thresholds, x_range, min_max_range = model.calulcate_threshold(odds_space=True) 
-            # thresholds= [-5, -2.5, 2.5, 5]
-            bins=model.risk_thresholds()  
-                
-            individual_id = individual.id
-            
-            individual_data = copy.deepcopy(model)
-            individual_data.df = individual_data.df[individual_data.df["ID"] == individual_id]
-            individual = individual_data.to_data_point( columns=["ID", st.session_state["target"]])
-            
-            description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True, odds_space=True)      
-            st.markdown("###### **Synthesized Text about individual:**")
-            st.write(description.synthesized_text)
-            # Make a plot of the distribution of the metrics for all players
-            # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
-            # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
-            
+        if st.button("Export 24 configurations for this patient"):
+            with st.spinner("Generating 24 configurations (this may take a minute)..."):
+                df_result = export_configurations(model, individual=individual)
+            with open('patient_export.xlsx', 'rb') as f:
+                st.download_button(
+                    label="Download Excel",
+                    data=f,
+                    file_name=f'patient_{individual.name}_configurations.xlsx',
+                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
 
 
-            visual = DistributionModelPlot(thresholds,min_max_range,metrics, model_features=model_features)
-            visual.add_title('Evaluation of individual','')
-            visual.add_individuals(model, metrics=metrics, target=target)
-            visual.add_individual(individual, len(model.df), metrics=metrics, center=1)
-            st.write(visual.show())
-            summary = description.stream_gpt()
-            st.markdown("###### **Summary of the individual:**")
-            st.write(summary)
-            chat.state="empty"
-        st.markdown("##### **Approach 4: Contributionj(cont)=e^(xj​×βj​- mean(xj​×βj)) or Contributionj(categ)=e^(xj​×βj)**")
-        
-        with st.expander("Description of the individual with one fixed threshold", expanded=False):
-            model.weight_contributions(type='method-5')
-            thresholds, x_range, min_max_range = model.calulcate_threshold(odds_space=True)
-            # thresholds= [-5, -2.5, 2.5, 5]
-            bins=model.risk_thresholds()  
-                
-            individual_id = individual.id
-            
-            individual_data = copy.deepcopy(model)
-            individual_data.df = individual_data.df[individual_data.df["ID"] == individual_id]
-            individual = individual_data.to_data_point( columns=["ID", st.session_state["target"]])
-            
-            description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True, odds_space=True)      
-            st.markdown("###### **Synthesized Text about individual:**")
-            st.write(description.synthesized_text)
-            # Make a plot of the distribution of the metrics for all players
-            # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
-            # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
-            visual = DistributionModelPlot(thresholds,min_max_range,metrics, model_features=model_features)
-            visual.add_title('Evaluation of individual','')
-            visual.add_individuals(model, metrics=metrics, target=target)
-            visual.add_individual(individual, len(model.df), metrics=metrics, center=1)
-            st.write(visual.show())
-            summary = description.stream_gpt()
-            st.markdown("###### **Summary of the individual:**")
-            st.write(summary)
-            chat.state="empty"
-        # st.markdown("##### **Approach 6: Contributionj=e^(xj​×βj)​/ mean(e^xj​×βj))**")
-        # with st.expander("Description of the individual with one fixed threshold", expanded=False):
-        #     model.weight_contributions(type='method-6')
-        #     thresholds, x_range = model.calulcate_threshold(odds_space=True) 
-        #     # thresholds= [-5, -2.5, 2.5, 5]
-        #     bins=model.risk_thresholds()  
-                
-        #     individual_id = individual.id
-            
-        #     individual_data = copy.deepcopy(model)
-        #     individual_data.df = individual_data.df[individual_data.df["ID"] == individual_id]
-        #     individual = individual_data.to_data_point( columns=["ID", st.session_state["target"]])
-            
-        #     description = IndividualDescription(individual,metrics,parameter_explanation=model.parameter_explanation, categorical_interpretations= categorical_interpretations , thresholds= thresholds, target=target, bins=bins, model_features=model_features, individuals=model.df, fixed=True, odds_space=True)      
-        #     st.markdown("###### **Synthesized Text about individual:**")
-        #     st.write(description.synthesized_text)
-        #     # Make a plot of the distribution of the metrics for all players
-        #     # We reverse the order of the elements in metrics for plotting (because they plot from bottom to top)
-        #     # metrics= ['ap_lo', 'bmi', 'gender', 'cholesterol' ]
-        #     visual = DistributionModelPlot(thresholds,[min(thresholds), max(thresholds)],metrics, model_features=model_features)
-        #     visual.add_title('Evaluation of individual','')
-        #     visual.add_individuals(model, metrics=metrics, target=target)
-        #     visual.add_individual(individual, len(model.df), metrics=metrics, center=1)
-        #     st.write(visual.show())
-        #     summary = description.stream_gpt()
-        #     st.markdown("###### **Summary of the individual:**")
-        #     st.write(summary)
-        #     chat.state="empty"
-        # # Add the visual and summary to the chat
-        # chat.add_message(
-        #     "Please can you summarise this individual for me?",
-        #     role="user",
-        #     user_only=False,
-        #     visible=False,
-        # )
-        # chat.add_message(visual)
-        # chat.add_message(summary)
+        st.markdown("###### **Synthesized Text about individual:**")
+        st.write(description.synthesized_text)
 
-        # chat.state = "default"
+        visual = DistributionModelPlot(thresholds, min_max_range, metrics, model_features=model_features, key="main")
+        visual.add_title('Evaluation of individual', '')
+        visual.add_individuals(model, metrics=metrics, target=target)
+        visual.add_individual(individual, len(model.df), metrics=metrics, center=1 if odds_space else 0)
+        visual.show()
+        summary = description.stream_gpt()
+        st.markdown("###### **Summary of the individual:**")
+        st.write(summary)
+        chat.state = "empty"
 
     # Now we want to get the user input, display the messages and save the state
     chat.get_input()
@@ -495,8 +425,13 @@ with tab1:
 
 with tab2:
     st.header("Chat & Visualization")
+    
     if("model" in st.session_state):
         setup_chat()
     else:
         st.info("You need to setup the model first before you can chat. Please go to the 'Setup Model' tab to do that.")
     # Placeholder for model results, visualizations, and chat logic
+
+
+
+
