@@ -117,11 +117,11 @@ class Visual:
                 },
                 itemclick=False,
                 itemdoubleclick=False,
-                x=0.5,
-                xanchor="center",
-                y=-0.2,
-                yanchor="bottom",
-                valign="middle",  # Align the text to the middle of the legend
+                x=1,
+                xanchor="right",
+                y=1.12,
+                yanchor="top",
+                valign="middle",
             ),
             xaxis=dict(
                 tickfont={
@@ -375,44 +375,58 @@ class DistributionPlot(Visual):
 
 class DistributionModelPlot(DistributionPlot):
 
-    def __init__(self, thresolds, x_range, columns, model_features= None, key=None, *args, **kwargs):
+    def __init__(self, thresolds, x_range, columns, model_features=None, key=None, threshold_type="highest", *args, **kwargs):
         self.key = key
         self.thresolds = thresolds
         self.model_features = model_features
         self.x_range = x_range
-        super().__init__(columns,*args, **kwargs)
+        self.threshold_type = threshold_type
+        super().__init__(columns, *args, **kwargs)
 
 
     def _setup_axes(self):
-        tick_labels = [f"{label} ({tick})" for tick, label in zip(
-            self.thresolds,
-            ["strongly reduced", "moderately reduced", "moderately increased", "strongly increased"]
-        )]
-        self.fig.update_xaxes(
-            range=self.x_range,
-            fixedrange=True,
-            tickmode="array",
-            tickvals=self.thresolds,
-            ticktext=tick_labels,
-            tickfont={
-                "color": rgb_to_color(self.black, 0.75),
-                "family": "Gilroy-Light",
-                "size": 11 * self.font_size_multiplier,
-            },
-            linecolor=rgb_to_color(self.gray),
-            tickcolor=rgb_to_color(self.gray),
-        )
-        for tick in self.thresolds:
-            self.fig.add_shape(
-                type="line",
-                x0=tick,
-                y0=0,
-                x1=tick,
-                y1=1,
-                xref='x',
-                yref='paper',
-                line=dict(color=rgb_to_color(self.gray, 0.5), width=1, dash="dot")
+        tick_font = {
+            "color": rgb_to_color(self.black, 0.75),
+            "family": "Gilroy-Light",
+            "size": 11 * self.font_size_multiplier,
+        }
+        if self.threshold_type == "feature_specific":
+            self.fig.update_xaxes(
+                range=self.x_range,
+                fixedrange=True,
+                tickmode="array",
+                tickvals=self.x_range,
+                ticktext=["Lower risk", "Higher risk"],
+                tickfont=tick_font,
+                linecolor=rgb_to_color(self.gray),
+                tickcolor=rgb_to_color(self.gray),
             )
+        else:
+            tick_labels = [f"{label} ({tick:.2f})" for tick, label in zip(
+                self.thresolds,
+                ["strongly reduced", "moderately reduced", "moderately increased", "strongly increased"]
+            )]
+            self.fig.update_xaxes(
+                range=self.x_range,
+                fixedrange=True,
+                tickmode="array",
+                tickvals=self.thresolds,
+                ticktext=tick_labels,
+                tickfont=tick_font,
+                linecolor=rgb_to_color(self.gray),
+                tickcolor=rgb_to_color(self.gray),
+            )
+            for tick in self.thresolds:
+                self.fig.add_shape(
+                    type="line",
+                    x0=tick,
+                    y0=0,
+                    x1=tick,
+                    y1=1,
+                    xref='x',
+                    yref='paper',
+                    line=dict(color=rgb_to_color(self.gray, 0.5), width=1, dash="dot")
+                )
         self.fig.update_yaxes(
             showticklabels=False,
             fixedrange=True,

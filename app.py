@@ -386,7 +386,14 @@ def setup_chat():
         st.markdown("###### **Synthesized Text about individual:**")
         st.write(description.synthesized_text)
 
-        visual = DistributionModelPlot(thresholds, min_max_range, metrics, model_features=model_features, key="main")
+        st.write("Thresholds for this patient based on the current configuration:", thresholds, "with min-max range:", min_max_range)
+
+        if threshold_type == "average":
+            all_bins = list(bins.values())
+            plot_thresholds = [sum(col) / len(col) for col in zip(*all_bins)]
+        else:
+            plot_thresholds = thresholds
+        visual = DistributionModelPlot(plot_thresholds, min_max_range, metrics, model_features=model_features, key="main", threshold_type=threshold_type)
         visual.add_title('Evaluation of individual', '')
         visual.add_individuals(model, metrics=metrics, target=target)
         visual.add_individual(individual, len(model.df), metrics=metrics, center=1 if odds_space else 0)
