@@ -386,8 +386,6 @@ def setup_chat():
         st.markdown("###### **Synthesized Text about individual:**")
         st.write(description.synthesized_text)
 
-        st.write("Thresholds for this patient based on the current configuration:", thresholds, "with min-max range:", min_max_range)
-
         if threshold_type == "average":
             all_bins = list(bins.values())
             plot_thresholds = [sum(col) / len(col) for col in zip(*all_bins)]
