@@ -839,8 +839,12 @@ class Model(Data):
 
         self.df = df
 
-        # total risk 
-        df['total_risk_contribution'] = df[[col for col in df.columns if '_contribution' in col]].sum(axis=1)
+        # total risk: product of odds-ratio contributions (multiplicative), sum in linear (log-odds) space
+        contribution_cols = [col for col in df.columns if '_contribution' in col]
+        if scale == 'odds':
+            df['total_risk_contribution'] = df[contribution_cols].prod(axis=1)
+        else:
+            df['total_risk_contribution'] = df[contribution_cols].sum(axis=1)
 
 
     def calulcate_threshold(self, odds_space=False):
