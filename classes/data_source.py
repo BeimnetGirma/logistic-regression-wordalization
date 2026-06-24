@@ -804,9 +804,10 @@ class Model(Data):
                     
                 elif baseline == 'specific':
                     if is_categorical:
-                        # Reference category scores exactly 0
-                        # e.g. female=0*β=0, male=1*β=β — no centring
-                        df[row['Parameter'] + '_contribution'] = raw
+                        # Reference category (minimum value) scores exactly 0
+                        # e.g. cholesterol: 1→0, 2→β, 3→2β
+                        min_raw = (df[row['Parameter']].min()) * row['Value']
+                        df[row['Parameter'] + '_contribution'] = raw - min_raw
                     else:
                         # Continuous has no reference group — population average is
                         # the only meaningful anchor, so we still centre
@@ -824,8 +825,10 @@ class Model(Data):
                         
                 elif baseline == 'specific':
                     if is_categorical:
-                        # method-2/5: e^(x·β) — reference category scores exp(0)=1
-                        df[row['Parameter'] + '_contribution'] = np.exp(raw)
+                        # Reference category (minimum value) scores exp(0)=1 (neutral)
+                        # e.g. cholesterol: 1→exp(0)=1, 2→exp(β), 3→exp(2β)
+                        min_raw = (df[row['Parameter']].min()) * row['Value']
+                        df[row['Parameter'] + '_contribution'] = np.exp(raw - min_raw)
                     else:
                         # Continuous with specific baseline is ambiguous —
                         # no reference group exists, so fall back to population average
@@ -875,8 +878,10 @@ class Model(Data):
                     bins = [round(np.exp(log_mean + i * log_std), 4) 
                             for i in [-1, -0.5, 0.5, 1]]
                 else:
-                    mean, std = data.mean(), data.std()
-                    bins = [round(mean + i * std, 4) for i in [-1, -0.5, 0.5, 1]]
+                    # Always center thresholds at 0 (ignore actual column mean)
+                    # This ensures symmetric thresholds: [-1σ, -0.5σ, +0.5σ, +1σ]
+                    std = data.std()
+                    bins = [round(i * std, 4) for i in [-1, -0.5, 0.5, 1]]
                 
                 bins_dict[col] = bins
         return bins_dict
