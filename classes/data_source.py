@@ -866,7 +866,7 @@ class Model(Data):
     def risk_thresholds(self, odds_space=False):
         bins_dict = {}
         for col in self.df.columns:
-            if 'contribution' in col: 
+            if 'contribution' in col:
                 data = self.df[col]
                 
                 if odds_space:

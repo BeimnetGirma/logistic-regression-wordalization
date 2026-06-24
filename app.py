@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
+import numpy as np
 
 from classes.train_model import TrainModel
 from classes.data_source import Model
@@ -387,8 +388,14 @@ def setup_chat():
         st.write(description.synthesized_text)
 
         if threshold_type == "average":
-            all_bins = list(bins.values())
-            plot_thresholds = [sum(col) / len(col) for col in zip(*all_bins)]
+            # Exclude total_risk_contribution — it's a sum of per-feature values and has a
+            # different scale, which skews the average threshold positions.
+            feature_bins = [v for k, v in bins.items() if k != 'total_risk_contribution']
+            if odds_space:
+                # Odds ratios are multiplicative: use geometric mean (average in log space)
+                plot_thresholds = [round(np.exp(np.mean(np.log(col))), 4) for col in zip(*feature_bins)]
+            else:
+                plot_thresholds = [sum(col) / len(col) for col in zip(*feature_bins)]
         else:
             plot_thresholds = thresholds
         visual = DistributionModelPlot(plot_thresholds, min_max_range, metrics, model_features=model_features, key="main", threshold_type=threshold_type)
