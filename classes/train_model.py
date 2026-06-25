@@ -32,11 +32,11 @@ class TrainModel():
         significance_level= 0.05
         current_features= self.features
         while len(current_features) >1 :
-            X_current =self.X_train[current_features]
+            X_current = self.X_train[['const'] + current_features]
             model = sm.Logit(self.y_train, X_current).fit(disp=False)
 
-            # Get the predictor with the highest p-value
-            p_values= model.pvalues
+            # Get the predictor with the highest p-value (exclude intercept)
+            p_values = model.pvalues.drop('const')
             highest_p_value= p_values.max()
             feature_to_remove=p_values.idxmax()
             st.write("P-values of the features",p_values)
