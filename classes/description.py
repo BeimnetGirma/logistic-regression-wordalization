@@ -826,7 +826,6 @@ class IndividualDescription(Description):
         
         
         if metric != "age" and self.risk_age:
-            print("Printing ********\n*********** age sentnece", self.risk_age)
             effect = "decreases" if risk_increase < 0 else "increases"
             risk_increase = abs(risk_increase)
             text+= f"This corresponds to a {sentences.format_numbers(risk_increase)} years {effect} in risk age. "
@@ -841,7 +840,7 @@ class IndividualDescription(Description):
             f"{sentences.describe_contributions(individual.ser_metrics['total_risk_contribution'], thresholds=self.bins['total_risk_contribution'], words=words)} "
             f"compared to other patients who come into the clinic."
         )
-        if individual.ser_metrics['total_risk_contribution'] > total_thresholds[1]:
+        if individual.ser_metrics['total_risk_contribution'] > self.bins['total_risk_contribution'][1]:
             max_metric = max(
                 {k: v for k, v in individual.ser_metrics.items() if k.endswith("_contribution") and k != "total_risk_contribution"},
                 key=individual.ser_metrics.get 
