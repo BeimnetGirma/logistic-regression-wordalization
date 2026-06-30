@@ -5,12 +5,11 @@ from types import GeneratorType
 import pandas as pd
 import json
 
-from settings import USE_GEMINI
-
-if USE_GEMINI:
-    from settings import USE_GEMINI, GEMINI_API_KEY, GEMINI_CHAT_MODEL
-else:
-    from settings import GPT_BASE, GPT_VERSION, GPT_KEY, GPT_ENGINE
+from settings import (
+    USE_GEMINI,
+    GPT_BASE, GPT_VERSION, GPT_KEY, GPT_ENGINE,
+    GEMINI_API_KEY, GEMINI_CHAT_MODEL,
+)
 
 from classes.description import (
     PlayerDescription,

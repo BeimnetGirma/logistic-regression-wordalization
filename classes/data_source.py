@@ -804,9 +804,10 @@ class Model(Data):
                     
                 elif baseline == 'specific':
                     if is_categorical:
-                        # Reference category scores exactly 0
-                        # e.g. female=0*β=0, male=1*β=β — no centring
-                        df[row['Parameter'] + '_contribution'] = raw
+                        # Reference category (minimum value) scores exactly 0
+                        # e.g. cholesterol: 1→0, 2→β, 3→2β
+                        min_raw = (df[row['Parameter']].min()) * row['Value']
+                        df[row['Parameter'] + '_contribution'] = raw - min_raw
                     else:
                         # Continuous has no reference group — population average is
                         # the only meaningful anchor, so we still centre
@@ -824,8 +825,10 @@ class Model(Data):
                         
                 elif baseline == 'specific':
                     if is_categorical:
-                        # method-2/5: e^(x·β) — reference category scores exp(0)=1
-                        df[row['Parameter'] + '_contribution'] = np.exp(raw)
+                        # Reference category (minimum value) scores exp(0)=1 (neutral)
+                        # e.g. cholesterol: 1→exp(0)=1, 2→exp(β), 3→exp(2β)
+                        min_raw = (df[row['Parameter']].min()) * row['Value']
+                        df[row['Parameter'] + '_contribution'] = np.exp(raw - min_raw)
                     else:
                         # Continuous with specific baseline is ambiguous —
                         # no reference group exists, so fall back to population average
@@ -836,7 +839,7 @@ class Model(Data):
 
         self.df = df
 
-        # total risk — product in odds space (exp(a)*exp(b) = exp(a+b)), sum in log-odds space
+        # total risk: product of odds-ratio contributions (multiplicative), sum in linear (log-odds) space
         contribution_cols = [col for col in df.columns if '_contribution' in col]
         if scale == 'odds':
             df['total_risk_contribution'] = df[contribution_cols].prod(axis=1)
@@ -844,32 +847,29 @@ class Model(Data):
             df['total_risk_contribution'] = df[contribution_cols].sum(axis=1)
 
 
-    def calulcate_threshold(self, odds_space=False):
+    def calulcate_threshold(self, odds_space=False, column=None):
         df = self.df
         contribution_columns = [col for col in df.columns if '_contribution' in col and col != 'total_risk_contribution']
-        self.std_contributions = df[contribution_columns].std()
-        most_variable_column= self.std_contributions.idxmax()
-        most_variable_data = self.df[most_variable_column]
-        mean, std = np.mean(most_variable_data),np.std(most_variable_data)
-        min_value, max_value = most_variable_data.min(), most_variable_data.max()
 
-        linear_thresholds = [round(mean + i * std, 2) for i in [-1, -0.5, 0.5, 1]]
-        if odds_space:
-            # Compute thresholds from the most-variable feature's distribution in log space,
-            # then exponentiate — mirrors feature-specific logic but anchored to one feature.
-            log_data = np.log(most_variable_data.clip(lower=1e-9))
-            log_mean, log_std = log_data.mean(), log_data.std()
-            thresholds = [round(np.exp(log_mean + i * log_std), 2) for i in [-1, -0.5, 0.5, 1]]
-            plot_range = [thresholds[0], thresholds[-1]]
+        log_df = np.log(df[contribution_columns].clip(lower=1e-9)) if odds_space else df[contribution_columns]
+        self.std_contributions = log_df.std()
+        if column is not None and column in log_df.columns:
+            most_variable_column = column
         else:
-            thresholds = linear_thresholds
-            plot_range = [thresholds[0], thresholds[-1]]
+            most_variable_column = self.std_contributions.idxmax()
+        series = log_df[most_variable_column]
+        mean, sigma = series.mean(), series.std()
+        log_thresholds = [mean + i * sigma for i in [-1, -0.5, 0.5, 1]]
+        thresholds = [round(np.exp(t), 2) if odds_space else round(t, 2) for t in log_thresholds]
+
+        plot_range = [thresholds[0], thresholds[-1]]
+        min_value, max_value = df[most_variable_column].min(), df[most_variable_column].max()
         return thresholds, plot_range, [min_value, max_value]
 
     def risk_thresholds(self, odds_space=False):
         bins_dict = {}
         for col in self.df.columns:
-            if 'contribution' in col: 
+            if 'contribution' in col:
                 data = self.df[col]
                 
                 if odds_space:
@@ -881,7 +881,8 @@ class Model(Data):
                     bins = [round(np.exp(log_mean + i * log_std), 4) 
                             for i in [-1, -0.5, 0.5, 1]]
                 else:
-                    mean, std = data.mean(), data.std()
+                    mean = data.mean()
+                    std = data.std()
                     bins = [round(mean + i * std, 4) for i in [-1, -0.5, 0.5, 1]]
                 
                 bins_dict[col] = bins

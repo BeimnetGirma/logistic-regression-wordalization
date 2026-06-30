@@ -14,12 +14,11 @@ from classes.data_source import PersonStat
 
 import json
 
-from settings import USE_GEMINI
-
-if USE_GEMINI:
-    from settings import USE_GEMINI, GEMINI_API_KEY, GEMINI_CHAT_MODEL
-else:
-    from settings import GPT_BASE, GPT_VERSION, GPT_KEY, GPT_ENGINE
+from settings import (
+    USE_GEMINI,
+    GPT_BASE, GPT_VERSION, GPT_KEY, GPT_ENGINE,
+    GEMINI_API_KEY, GEMINI_CHAT_MODEL,
+)
 
 import streamlit as st
 import random
@@ -742,7 +741,7 @@ class IndividualDescription(Description):
                 else self.describe_metric_linear(metric, beta_age)
             )
 
-        description+= self.describe_overall_risk(calculated_age)
+        description+= self.describe_overall_risk(calculated_age, odds_space=self.odds_space)
 
         return description
     def describe_metric_linear(self, metric, beta_age):
@@ -820,9 +819,9 @@ class IndividualDescription(Description):
 
         #compose sentence
         if percent_change == 0:
-            text += f"  does not significantly affect your risk of developing {self.target} issues."
+            text += f"  does not significantly affect your odds of developing {self.target} issues."
         else:
-            text += f"  {direction} your risk of developing {self.target} issues by {percent_change:.1f}% compared to the average patient {self.get_average_value(metric)}. "
+            text += f"  {direction} your odds of developing {self.target} issues by {percent_change:.1f}% compared to the average patient {self.get_average_value(metric)}. "
         
         
         
@@ -833,16 +832,13 @@ class IndividualDescription(Description):
             text+= f"This corresponds to a {sentences.format_numbers(risk_increase)} years {effect} in risk age. "
         return text
     
-    def describe_overall_risk(self, calculated_age):
+    def describe_overall_risk(self, calculated_age, odds_space=False):
         individual = self.individual
-        words = ["strongly reduced", "moderately reduced", "average", "moderately increased", "strongly increased"]
-        # The total always uses its own distribution for thresholding — individual-feature thresholds
-        # (global or average) are calibrated per-feature and have a different scale from the total,
-        # so they cannot be applied here regardless of threshold_type.
-        total_thresholds = self.bins['total_risk_contribution']
-        text = (
-            f" The patient's overall risk of developing {self.target} issues is "
-            f"{sentences.describe_contributions(individual.ser_metrics['total_risk_contribution'], thresholds=total_thresholds, words=words)} "
+        words= ["strongly reduced", "moderately reduced", "average", "moderately increased", "strongly increased"]
+        risk_or_odds = "odds" if odds_space else "risk"
+        text=(
+            f" The patient's overall {risk_or_odds} of developing {self.target} issues is "
+            f"{sentences.describe_contributions(individual.ser_metrics['total_risk_contribution'], thresholds=self.bins['total_risk_contribution'], words=words)} "
             f"compared to other patients who come into the clinic."
         )
         if individual.ser_metrics['total_risk_contribution'] > total_thresholds[1]:

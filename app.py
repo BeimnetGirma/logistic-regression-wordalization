@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
+import numpy as np
 
 from classes.train_model import TrainModel
 from classes.data_source import Model
@@ -9,6 +10,7 @@ from classes.description import (
     IndividualDescription,
 )
 import copy
+import types
 from utils.page_components import (
     create_chat,
 )
@@ -276,7 +278,7 @@ def setup_model(train=False):
 
 def setup_data(data, model_features, categorical_interpretations=None, target=None):
     model=Model()
-    model.set_data(data.head(90), model_features, categorical_interpretations=categorical_interpretations)
+    model.set_data(data, model_features, categorical_interpretations=categorical_interpretations)
     model.process_data()
     # model.weight_contributions()
     # bins=model.risk_thresholds()
@@ -305,7 +307,7 @@ def setup_chat():
     # Define axes explicitly
     AXES = {
         "scale": {"log_odds": "Log-odds", "odds_ratio": "Odds Ratio / % Change"},
-        "reference": {"independent": "Independent", "largest": "Relative to Largest", "average": "Relative to Average"},
+        "reference": {"independent": "Independent", "largest": "Relative to Largest", "average": "Relative to Average", "age": "Relative to Age"},
         "risk_age": {"yes": "Include Risk-Age", "no": "Exclude Risk-Age"},
         "baseline": {"specific": "Specific Group", "population": "Population Average"}
     }
@@ -334,16 +336,17 @@ def setup_chat():
         "Independent": "feature_specific",
         "Relative to Largest": "highest",
         "Relative to Average": "average",
+        "Relative to Age": "age",
     }
     threshold_type = threshold_type_map[reference]
 
     # Apply contributions and compute thresholds for the current config
-    # model.weight_contributions(type=weight_method)
     scale_param = 'odds' if scale == "Odds Ratio / % Change" else 'linear'
     baseline_param = 'specific' if baseline == "Specific Group" else 'population'
 
     model.weight_contributions(scale=scale_param, baseline=baseline_param)
-    thresholds, x_range, min_max_range = model.calulcate_threshold(odds_space=odds_space)
+    age_column = 'age_contribution' if threshold_type == "age" else None
+    thresholds, x_range, _ = model.calulcate_threshold(odds_space=odds_space, column=age_column)
     bins = model.risk_thresholds(odds_space=odds_space)
 
     # Recreate individual from the updated model so contributions reflect current config
@@ -387,13 +390,29 @@ def setup_chat():
         st.write(description.synthesized_text)
 
         if threshold_type == "average":
-            all_bins = list(bins.values())
-            plot_thresholds = [sum(col) / len(col) for col in zip(*all_bins)]
+            # Exclude total_risk_contribution — it's a sum of per-feature values and has a
+            # different scale, which skews the average threshold positions.
+            feature_bins = [v for k, v in bins.items() if k != 'total_risk_contribution']
+            if odds_space:
+                # Odds ratios are multiplicative: use geometric mean (average in log space)
+                plot_thresholds = [round(np.exp(np.mean(np.log(col))), 4) for col in zip(*feature_bins)]
+            else:
+                plot_thresholds = [sum(col) / len(col) for col in zip(*feature_bins)]
         else:
             plot_thresholds = thresholds
-        visual = DistributionModelPlot(plot_thresholds, min_max_range, metrics, model_features=model_features, key="main", threshold_type=threshold_type)
+
+        plot_df = model.df.sample(90, random_state=42)
+        contribution_cols = [c for c in plot_df.columns if '_contribution' in c and c != 'total_risk_contribution']
+        plot_min = plot_df[contribution_cols].min().min()
+        plot_max = plot_df[contribution_cols].max().max()
+        if threshold_type != "feature_specific" and plot_thresholds:
+            plot_min_max = [min(plot_min, plot_thresholds[0]), max(plot_max, plot_thresholds[-1])]
+        else:
+            plot_min_max = [plot_min, plot_max]
+
+        visual = DistributionModelPlot(plot_thresholds, plot_min_max, metrics, model_features=model_features, key="main", threshold_type=threshold_type)
         visual.add_title('Evaluation of individual', '')
-        visual.add_individuals(model, metrics=metrics, target=target)
+        visual.add_individuals(types.SimpleNamespace(df=plot_df), metrics=metrics, target=target)
         visual.add_individual(individual, len(model.df), metrics=metrics, center=1 if odds_space else 0)
         visual.show()
         summary = description.stream_gpt()
