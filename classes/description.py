@@ -759,8 +759,8 @@ class IndividualDescription(Description):
             text = sentences.article(self.parameter_explanation[metric].lower()) + f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(value)} "
             risk_increase = self.calculate_risk_age_increase(metric, value, beta_feature, beta_age)
         
-        # if(self.threshold_type == "average"):
-        avg = np.array(list(self.bins.values())).mean(axis=0).tolist() 
+        feature_bins = {k: v for k, v in self.bins.items() if k != 'total_risk_contribution'}
+        avg = np.array(list(feature_bins.values())).mean(axis=0).tolist()
         
         thresholds = (
     self.thresholds
@@ -841,7 +841,7 @@ class IndividualDescription(Description):
             f"{sentences.describe_contributions(individual.ser_metrics['total_risk_contribution'], thresholds=self.bins['total_risk_contribution'], words=words)} "
             f"compared to other patients who come into the clinic."
         )
-        if individual.ser_metrics['total_risk_contribution'] > self.bins['total_risk_contribution'][1]:
+        if individual.ser_metrics['total_risk_contribution'] > total_thresholds[1]:
             max_metric = max(
                 {k: v for k, v in individual.ser_metrics.items() if k.endswith("_contribution") and k != "total_risk_contribution"},
                 key=individual.ser_metrics.get 
