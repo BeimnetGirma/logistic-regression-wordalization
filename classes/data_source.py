@@ -836,8 +836,12 @@ class Model(Data):
 
         self.df = df
 
-        # total risk 
-        df['total_risk_contribution'] = df[[col for col in df.columns if '_contribution' in col]].sum(axis=1)
+        # total risk — product in odds space (exp(a)*exp(b) = exp(a+b)), sum in log-odds space
+        contribution_cols = [col for col in df.columns if '_contribution' in col]
+        if scale == 'odds':
+            df['total_risk_contribution'] = df[contribution_cols].prod(axis=1)
+        else:
+            df['total_risk_contribution'] = df[contribution_cols].sum(axis=1)
 
 
     def calulcate_threshold(self, odds_space=False):
@@ -851,13 +855,15 @@ class Model(Data):
 
         linear_thresholds = [round(mean + i * std, 2) for i in [-1, -0.5, 0.5, 1]]
         if odds_space:
-            log_thresholds = [-1, -0.5, 0.5, 1]
-            thresholds = [round(np.exp(x), 2) for x in log_thresholds]
-            plot_range=[thresholds[0], thresholds[-1]]
-            
+            # Compute thresholds from the most-variable feature's distribution in log space,
+            # then exponentiate — mirrors feature-specific logic but anchored to one feature.
+            log_data = np.log(most_variable_data.clip(lower=1e-9))
+            log_mean, log_std = log_data.mean(), log_data.std()
+            thresholds = [round(np.exp(log_mean + i * log_std), 2) for i in [-1, -0.5, 0.5, 1]]
+            plot_range = [thresholds[0], thresholds[-1]]
         else:
             thresholds = linear_thresholds
-            plot_range= [thresholds[0], thresholds[-1]]
+            plot_range = [thresholds[0], thresholds[-1]]
         return thresholds, plot_range, [min_value, max_value]
 
     def risk_thresholds(self, odds_space=False):
