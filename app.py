@@ -292,7 +292,7 @@ def setup_data(data, model_features, categorical_interpretations=None, target=No
     st.session_state["model_features"] = model_features
 
     st.expander("Dataframe used", expanded=True).write(model.df)
-    st.success("Model data is processed! Go to the 'Chat' tab to select an individual.")
+    st.success("Model data is processed! Go to the 'Wordalisation' tab to select an individual.")
     
 def setup_chat():
     model = st.session_state["model"]
@@ -427,7 +427,7 @@ def setup_chat():
 
 
 # Tabs for the main section
-tab1, tab2 = st.tabs(["Setup Model", "Chat"])
+tab2, tab1 = st.tabs(["Wordalisation", "Setup Model"])
 
 with tab1:
     st.header("Setup Model")
@@ -448,12 +448,12 @@ with tab1:
         # data, model_features= setup_model(train=False)
 
 with tab2:
-    st.header("Chat & Visualization")
+    st.header("Wordalisation")
     
     if("model" in st.session_state):
         setup_chat()
     else:
-        st.info("You need to setup the model first before you can chat. Please go to the 'Setup Model' tab to do that.")
+        st.info("You need to set up the model first before you can chat. Please go to the 'Setup Model' tab to do that.")
     # Placeholder for model results, visualizations, and chat logic
 
 
