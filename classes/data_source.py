@@ -17,6 +17,7 @@ import pyarrow.parquet as pq
 from math import floor, ceil
 
 import classes.data_point as data_point
+from utils.utils import drop_outlier_rows
 
 # from classes.wyscout_api import WyNot
 
@@ -627,7 +628,15 @@ class Model(Data):
         # Drop intercept
         self.parameters = parameters[parameters['Parameter'] != 'Intercept']
 
-        return df_raw   
+        feature_columns = [p for p in self.parameters['Parameter'] if p in df_raw.columns]
+        n_before = len(df_raw)
+        df_raw, dropped_counts = drop_outlier_rows(df_raw, columns=feature_columns)
+        rows_removed = n_before - len(df_raw)
+        if rows_removed:
+            st.info(f"Removed {rows_removed} rows with statistical outliers (IQR method) before analysis. Per-column flags: {dropped_counts}")
+
+        self.df = df_raw
+        return df_raw
     
     def read_model(self):
         parameters = pd.read_excel("data/medical/Anuerysm model - 2.xlsx")

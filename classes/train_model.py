@@ -2,11 +2,17 @@
 import statsmodels.api as sm
 from sklearn.model_selection import train_test_split
 import streamlit as st
+from utils.utils import drop_outlier_rows
 class TrainModel():
     def __init__(self, data, target, features):
-        
-        # encode the categorical variables 
+
+        # encode the categorical variables
         self.features= features
+        n_before = len(data)
+        data, dropped_counts = drop_outlier_rows(data, columns=features)
+        rows_removed = n_before - len(data)
+        if rows_removed:
+            st.info(f"Removed {rows_removed} rows with statistical outliers (IQR method) before training. Per-column flags: {dropped_counts}")
         X = data[features]
         y = data[target]
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
