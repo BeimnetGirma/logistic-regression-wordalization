@@ -1,14 +1,10 @@
 import streamlit as st
 import plotly.graph_objects as go
-import plotly.express as px
 import numpy as np
 import pandas as pd
 
 
 from utils.sentences import format_metric, lookup_metric
-from classes.data_point import Player, Country, Person, Individual
-from classes.data_source import PlayerStats, CountryStats, PersonStat, Model
-from typing import Union
 
 
 def hex_to_rgb(hex_color: str) -> tuple:
@@ -64,7 +60,7 @@ class Visual:
     table_green = hex_to_rgb("#009940")
     table_red = hex_to_rgb("#FF4B00")
 
-    def __init__(self, pdf=False, plot_type="scout"):
+    def __init__(self, pdf=False):
         self.pdf = pdf
         if pdf:
             self.font_size_multiplier = 1.4
@@ -72,22 +68,6 @@ class Visual:
             self.font_size_multiplier = 1.0
         self.fig = go.Figure()
         self._setup_styles()
-        self.plot_type = plot_type
-
-        if plot_type == "scout":
-            self.annotation_text = (
-                "<span style=''>{metric_name}: {data:.2f} per 90</span>"
-            )
-        else:
-            # self.annotation_text = "<span style=''>{metric_name}: {data:.0f}/66</span>"  # TODO: this text will not automatically update!
-            self.annotation_text = "<span style=''>{metric_name}: {data:.2f}</span>"
-
-        if plot_type == "scout":
-            self.annotation_text = (
-                "<span style=''>{metric_name}: {data:.2f} per 90</span>"
-            )
-        else:
-            self.annotation_text = "<span style=''>{metric_name}: {data:.2f}</span>"
 
     def show(self):
         st.plotly_chart(
@@ -163,15 +143,6 @@ class Visual:
                 "family": "Gilroy-Light",
                 "size": 12 * self.font_size_multiplier,
             },
-        )
-
-    def show(self):
-        st.plotly_chart(
-            self.fig,
-            key=self.key,
-            config={"displayModeBar": False},
-            height=500,
-            use_container_width=True,
         )
 
     def close(self):
@@ -299,73 +270,10 @@ class DistributionPlot(Visual):
             )
 
 
-    def add_player(self, player: Union[Player, Country], n_group, metrics):
-
-        # # Make list of all metrics with _Z and _Rank added at end
-        metrics_Z = [metric + "_Z" for metric in metrics]
-        metrics_Ranks = [metric + "_Ranks" for metric in metrics]
-
-        # Determine the appropriate attributes for player or country
-        if isinstance(player, Player):
-            ser_plot = player.ser_metrics
-            name = player.name
-        elif isinstance(player, Country):  # Adjust this based on your class structure
-            ser_plot = (
-                player.ser_metrics
-            )  # Assuming countries have a similar metric structure
-            name = player.name
-        else:
-            raise TypeError("Invalid player type: expected Player or Country")
-
-        self.add_data_point(
-            ser_plot=ser_plot,
-            plots="_Z",
-            name=name,
-            hover="_Ranks",
-            hover_string="Rank: %{customdata}/" + str(n_group),
-        )
 
   
-    def add_players(self, players: Union[PlayerStats, CountryStats], metrics):
-
-        # Make list of all metrics with _Z and _Rank added at end
-        metrics_Z = [metric + "_Z" for metric in metrics]
-        metrics_Ranks = [metric + "_Ranks" for metric in metrics]
-
-        if isinstance(players, PlayerStats):
-            self.add_group_data(
-                df_plot=players.df,
-                plots="_Z",
-                names=players.df["player_name"],
-                hover="_Ranks",
-                hover_string="Rank: %{customdata}/" + str(len(players.df)),
-                legend=f"Other players  ",  # space at end is important
-            )
-        elif isinstance(players, CountryStats):
-            self.add_group_data(
-                df_plot=players.df,
-                plots="_Z",
-                names=players.df["country"],
-                hover="_Ranks",
-                hover_string="Rank: %{customdata}/" + str(len(players.df)),
-                legend=f"Other countries  ",  # space at end is important
-            )
-        else:
-            raise TypeError("Invalid player type: expected Player or Country")
 
 
-    def add_title_from_player(self, player: Union[Player, Country]):
-        self.player = player
-
-        title = f"Evaluation of {player.name}?"
-        if isinstance(player, Player):
-            subtitle = f"Based on {player.minutes_played} minutes played"
-        elif isinstance(player, Country):
-            subtitle = f"Based on questions answered in the World Values Survey"
-        else:
-            raise TypeError("Invalid player type: expected Player or Country")
-
-        self.add_title(title, subtitle)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------

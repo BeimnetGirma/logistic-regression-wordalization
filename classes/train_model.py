@@ -1,63 +1,65 @@
 
 import statsmodels.api as sm
+from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
-import streamlit as st
+
+from utils.utils import drop_outlier_rows
+
+
 class TrainModel():
+    # Note: this class does no Streamlit output so that app.py can cache it.
     def __init__(self, data, target, features):
-        
-        # encode the categorical variables 
-        self.features= features
-        X = data[features]
+
+        # Categorical features are used as given (integer codes), not one-hot encoded,
+        # because the descriptions and categorical interpretations are keyed by feature name.
+        self.features = list(features)
+        # Remove rows with statistical outliers (IQR method) before training
+        n_before = len(data)
+        data, self.dropped_counts = drop_outlier_rows(data, columns=self.features)
+        self.rows_removed = n_before - len(data)
+        X = data[self.features]
         y = data[target]
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        X_train = sm.add_constant(X_train)
-        X_test = sm.add_constant(X_test)
-        self.X_train=X_train
-        self.y_train=y_train
-        logit_model = sm.Logit(y_train, X_train)  # Initialize the model
-        result = logit_model.fit()  # Fit the model
+        self.X_train = sm.add_constant(X_train)
+        self.X_test = sm.add_constant(X_test)
+        self.y_train = y_train
+        self.y_test = y_test
+        self.elimination_log = []
+
+        self._fit(self.features)
+
+    def _fit(self, features):
+        result = sm.Logit(self.y_train, self.X_train[['const'] + features]).fit(disp=False)
 
         # Extract coefficients and put them in a DataFrame
-        coef = result.params
-        coef_df = coef.reset_index()
-        # rename feature const to intercept
-        coef_df['index'].replace('const', 'Intercept', inplace=True)
+        coef_df = result.params.reset_index()
         coef_df.columns = ['Parameter', 'Value']
+        # rename feature const to intercept
+        coef_df['Parameter'] = coef_df['Parameter'].replace('const', 'Intercept')
         self.coef_df = coef_df
-        self.p_values = result.pvalues
-        st.expander("Summary of the trained model", expanded=False).write(result.summary())
+        self.p_values = result.pvalues.rename({'const': 'Intercept'})
+        self.summary = result.summary()
+        # Out-of-sample discrimination on the held-out 20%
+        self.test_auc = roc_auc_score(self.y_test, result.predict(self.X_test[['const'] + features]))
+        return result
 
-    def selectFeatures(self):
+    def selectFeatures(self, significance_level=0.05):
         # Backward elimination
-        significance_level= 0.05
-        current_features= self.features
-        while len(current_features) >1 :
-            X_current = self.X_train[['const'] + current_features]
-            model = sm.Logit(self.y_train, X_current).fit(disp=False)
+        current_features = list(self.features)
+        while len(current_features) > 1:
+            model = sm.Logit(self.y_train, self.X_train[['const'] + current_features]).fit(disp=False)
 
             # Get the predictor with the highest p-value (exclude intercept)
             p_values = model.pvalues.drop('const')
-            highest_p_value= p_values.max()
-            feature_to_remove=p_values.idxmax()
-            st.write("P-values of the features",p_values)
+            highest_p_value = p_values.max()
+            feature_to_remove = p_values.idxmax()
 
-            if highest_p_value >significance_level:
-                st.write(f"Removing feature {feature_to_remove} with p-value {highest_p_value}")
+            if highest_p_value > significance_level:
+                self.elimination_log.append((feature_to_remove, highest_p_value))
                 current_features.remove(feature_to_remove)  # Remove the predictor
             else:
-                print("All p-values are below the significance level")
-                print("Final features",current_features)
-                print("Final p-values",model.pvalues) 
                 break  # Stop if all p-values are below the significance level
+
         # Final model with selected features
-        
-        X_selected = self.X_train[current_features]
-        X_selected = sm.add_constant(X_selected)
-        final_model = sm.Logit(self.y_train, X_selected).fit()
-        # st.write("Final Model on Selected Features",final_model.summary())
-        coef = final_model.params
-        coef_df = coef.reset_index()
-        # rename feature const to intercept
-        coef_df['index'].replace('const', 'Intercept', inplace=True)
-        coef_df.columns = ['Parameter', 'Value']
-        self.coef_df = coef_df
+        self.features = current_features
+        self._fit(current_features)

@@ -1,18 +1,13 @@
-import math
 from abc import ABC, abstractmethod
-from typing import List, Union, Dict, Optional
+from typing import List, Union, Dict
 
 import pandas as pd
-import tiktoken
 import openai
 import numpy as np
 
 import utils.sentences as sentences
 from utils.gemini import convert_messages_format
-from classes.data_point import Player, Country, Person, Individual
-from classes.data_source import PersonStat
-
-import json
+from classes.data_point import Individual
 
 from settings import (
     USE_GEMINI,
@@ -20,8 +15,6 @@ from settings import (
     GEMINI_API_KEY, GEMINI_CHAT_MODEL,
 )
 
-import streamlit as st
-import random
 
 openai.api_type = "azure"
 
@@ -78,7 +71,7 @@ class Description(ABC):
                     "You are a data analysis bot. "
                     "You provide succinct and to the point explanations about data using data. "
                     "You use the information given to you from the data and answers "
-                    "to earlier user/assistant pairs to give summaries of players."
+                    "to earlier user/assistant pairs to give summaries of individuals."
                 ),
             },
         ]
@@ -185,10 +178,6 @@ class Description(ABC):
 
             converted_msgs = convert_messages_format(self.messages)
 
-            # # save converted messages to json
-            # with open("data/wvs/msgs_0.json", "w") as f:
-            #     json.dump(converted_msgs, f)
-
             genai.configure(api_key=GEMINI_API_KEY)
             model = genai.GenerativeModel(
                 model_name=GEMINI_CHAT_MODEL,
@@ -215,465 +204,10 @@ class Description(ABC):
         return answer
 
 
-class PlayerDescription(Description):
-    output_token_limit = 150
 
-    @property
-    def gpt_examples_path(self):
-        return f"{self.gpt_examples_base}/Forward.xlsx"
 
-    @property
-    def describe_paths(self):
-        return [f"{self.describe_base}/Forward.xlsx"]
 
-    def __init__(self, player: Player):
-        self.player = player
-        super().__init__()
 
-    def get_intro_messages(self) -> List[Dict[str, str]]:
-        """
-        Constant introduction messages for the assistant.
-
-        Returns:
-        List of dicts with keys "role" and "content".
-        """
-        intro = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a UK-based football scout. "
-                    "You provide succinct and to the point explanations about football players using data. "
-                    "You use the information given to you from the data and answers "
-                    "to earlier user/assistant pairs to give summaries of players."
-                ),
-            },
-            {
-                "role": "user",
-                "content": "Do you refer to the game you are an expert in as soccer or football?",
-            },
-            {
-                "role": "assistant",
-                "content": (
-                    "I refer to the game as football. "
-                    "When I say football, I don't mean American football, I mean what Americans call soccer. "
-                    "But I always talk about football, as people do in the United Kingdom."
-                ),
-            },
-        ]
-        if len(self.describe_paths) > 0:
-            intro += [
-                {
-                    "role": "user",
-                    "content": "First, could you answer some questions about football for me?",
-                },
-                {"role": "assistant", "content": "Sure!"},
-            ]
-
-        return intro
-
-    def synthesize_text(self):
-
-        player = self.player
-        metrics = self.player.relevant_metrics
-        description = f"Here is a statistical description of {player.name}, who played for {player.minutes_played} minutes as a {player.position}. \n\n "
-
-        subject_p, object_p, possessive_p = sentences.pronouns(player.gender)
-
-        for metric in metrics:
-
-            description += f"{subject_p.capitalize()} was "
-            description += sentences.describe_level(player.ser_metrics[metric + "_Z"])
-            description += " in " + sentences.write_out_metric(metric)
-            description += " compared to other players in the same playing position. "
-
-        # st.write(description)
-
-        return description
-
-    def get_prompt_messages(self):
-        prompt = (
-            f"Please use the statistical description enclosed with ``` to give a concise, 4 sentence summary of the player's playing style, strengths and weaknesses. "
-            f"The first sentence should use varied language to give an overview of the player. "
-            "The second sentence should describe the player's specific strengths based on the metrics. "
-            "The third sentence should describe aspects in which the player is average and/or weak based on the statistics. "
-            "Finally, summarise exactly how the player compares to others in the same position. "
-        )
-        return [{"role": "user", "content": prompt}]
-
-
-class CountryDescription(Description):
-    output_token_limit = 150
-
-    @property
-    def gpt_examples_path(self):
-        return f"{self.gpt_examples_base}/WVS_examples.xlsx"
-
-    @property
-    def describe_paths(self):
-        return [f"{self.describe_base}/WVS_qualities.xlsx"]
-
-    def __init__(self, country: Country, description_dict, thresholds_dict):
-        self.country = country
-        self.description_dict = description_dict
-        self.thresholds_dict = thresholds_dict
-
-        # read data/wvs/intermediate_data/relevant_questions.json
-        with open("data/wvs/intermediate_data/relevant_questions.json", "r") as f:
-            self.relevant_questions = json.load(f)
-
-        super().__init__()
-
-    def get_intro_messages(self) -> List[Dict[str, str]]:
-        """
-        Constant introduction messages for the assistant.
-
-        Returns:
-        List of dicts with keys "role" and "content".
-        """
-        intro = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a data analyst and a social scientist. "
-                    "You provide succinct and to the point explanations about countries using metrics derived from data collected in the World Value Survey. "
-                    "You use the information given to you from the data and answers to earlier questions to give summaries of how countries score in various metrics that attempt to measure the social values held by the population of that country."
-                ),
-            },
-            # {
-            #     "role": "user",
-            #     "content": "Do you refer to the game you are an expert in as soccer or football?",
-            # },
-            # {
-            #     "role": "assistant",
-            #     "content": (
-            #         "I refer to the game as football. "
-            #         "When I say football, I don't mean American football, I mean what Americans call soccer. "
-            #         "But I always talk about football, as people do in the United Kingdom."
-            #     ),
-            # },
-        ]
-        if len(self.describe_paths) > 0:
-            intro += [
-                {
-                    "role": "user",
-                    "content": "First, could you answer some questions about a the World Value Survey for me?",
-                },
-                {"role": "assistant", "content": "Sure!"},
-            ]
-
-        return intro
-
-    def synthesize_text(self):
-
-        description = f"Here is a statistical description of the core values of {self.country.name.capitalize()}. \n\n"
-
-        # subject_p, object_p, possessive_p = sentences.pronouns(country.gender)
-
-        for metric in self.country.relevant_metrics:
-
-            description += (
-                f"According to the WVS, {self.country.name.capitalize()} was found to "
-            )
-            description += sentences.describe_level(
-                self.country.ser_metrics[metric + "_Z"],
-                thresholds=self.thresholds_dict[metric],
-                words=self.description_dict[metric],
-            )
-            description += " compared to other countries in the same wave. "
-
-            if metric in self.country.drill_down_metrics:
-
-                if self.country.ser_metrics[metric + "_Z"] > 0:
-                    index = 1
-                else:
-                    index = 0
-
-                question, value = self.country.drill_down_metrics[metric]
-                question, value = question[index], value[index]
-                description += "In response to the question '"
-                description += self.relevant_questions[metric][question][0]
-                description += "', on average participants "
-                description += self.relevant_questions[metric][question][1]
-                description += " '"
-                description += self.relevant_questions[metric][question][2][str(value)]
-                description += "' "
-                description += self.relevant_questions[metric][question][3]
-                description += ". "
-
-            description += "\n\n"
-        # st.write(description)
-
-        return description
-
-    def get_prompt_messages(self):
-        prompt = (
-            f"Please use the statistical description enclosed with ``` to give a concise, 2 short paragraph summary of the social values held by population of the country. "
-            f"The first paragraph should focus on any factors or values for which the country is above or bellow average. If the country is neither above nor below average in any values, mention that. "
-            f"The remaining paragraph should mention any specific values or factors that are neither high nor low compared to the average. "
-        )
-        return [{"role": "user", "content": prompt}]
-
-
-class PersonDescription(Description):
-    output_token_limit = 150
-
-    @property
-    def gpt_examples_path(self):
-        return f"{self.gpt_examples_base}/Forward_bigfive.xlsx"
-
-    @property
-    def describe_paths(self):
-        return [f"{self.describe_base}/Forward_bigfive.xlsx"]
-
-    def __init__(self, person: Person):
-        self.person = person
-        super().__init__()
-
-    def get_intro_messages(self) -> List[Dict[str, str]]:
-        """
-        Constant introduction messages for the assistant.
-
-        Returns:
-        List of dicts with keys "role" and "content".
-        """
-        intro = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a recruiter. "
-                    "You provide succinct and to the point explanations about a candiate using data.  "
-                    "You use the information given to you from the data and answers"
-                    "to earlier user/assistant pairs to give summaries of candidates."
-                ),
-            },
-            {
-                "role": "user",
-                "content": "Do you refer to the candidate as a candidate or a person?",
-            },
-            {
-                "role": "assistant",
-                "content": (
-                    "I refer to the candidate as a person. "
-                    "When I say candidate, I mean person. "
-                    "But I always talk about the candidate, as a person."
-                ),
-            },
-        ]
-        if len(self.describe_paths) > 0:
-            intro += [
-                {
-                    "role": "user",
-                    "content": "First, could you answer some questions about a candidate for me?",
-                },
-                {"role": "assistant", "content": "Sure!"},
-            ]
-
-        return intro
-
-    def categorie_description(self, value):
-        if value <= -2:
-            return "The candidate is extremely "
-        elif -2 < value <= -1:
-            return "The candidate is very "
-        elif -1 < value <= -0.5:
-            return "The candidate is quite "
-        elif -0.5 < value <= 0.5:
-            return "The candidate is relatively "
-        elif 0.5 < value <= 1:
-            return "The candidate is quite "
-        elif 1 < value <= 2:
-            return "The candidate is very "
-        else:
-            return "The candidate is extremely "
-
-    def all_max_indices(self, row):
-        max_value = row.max()
-        return list(row[row == max_value].index)
-
-    def all_min_indices(self, row):
-        min_value = row.min()
-        return list(row[row == min_value].index)
-
-    def get_description(self, person):
-        # here we need the dataset to check the min and max score of the person
-
-        person_metrics = person.ser_metrics
-        person_stat = PersonStat()
-        questions = person_stat.get_questions()
-
-        name = person.name
-        extraversion = person_metrics["extraversion_Z"]
-        neuroticism = person_metrics["neuroticism_Z"]
-        agreeableness = person_metrics["agreeableness_Z"]
-        conscientiousness = person_metrics["conscientiousness_Z"]
-        openness = person_metrics["openness_Z"]
-
-        text = []
-
-        # extraversion
-        cat_0 = "solitary and reserved. "
-        cat_1 = "outgoing and energetic. "
-
-        if extraversion > 0:
-            text_t = self.categorie_description(extraversion) + cat_1
-            if extraversion > 1:
-                index_max = person_metrics[0:10].idxmax()
-                text_2 = (
-                    "In particular they said that " + questions[index_max][0] + ". "
-                )
-                text_t += text_2
-        else:
-            text_t = self.categorie_description(extraversion) + cat_0
-            if extraversion < -1:
-                index_min = person_metrics[0:10].idxmin()
-                text_2 = (
-                    "In particular they said that " + questions[index_min][0] + ". "
-                )
-                text_t += text_2
-        text.append(text_t)
-
-        # neuroticism
-        cat_0 = "resilient and confident. "
-        cat_1 = "sensitive and nervous. "
-
-        if neuroticism > 0:
-            text_t = (
-                self.categorie_description(neuroticism)
-                + cat_1
-                + "The candidate tends to feel more negative emotions, anxiety. "
-            )
-            if neuroticism > 1:
-                index_max = person_metrics[10:20].idxmax()
-                text_2 = (
-                    "In particular they said that " + questions[index_max][0] + ". "
-                )
-                text_t += text_2
-
-        else:
-            text_t = (
-                self.categorie_description(neuroticism)
-                + cat_0
-                + "The candidate tends to feel less negative emotions, anxiety. "
-            )
-            if neuroticism < -1:
-                index_min = person_metrics[10:20].idxmin()
-                text_2 = (
-                    "In particular they said that " + questions[index_min][0] + ". "
-                )
-                text_t += text_2
-        text.append(text_t)
-
-        # agreeableness
-        cat_0 = "critical and rational. "
-        cat_1 = "friendly and compassionate. "
-
-        if agreeableness > 0:
-            text_t = (
-                self.categorie_description(agreeableness)
-                + cat_1
-                + "The candidate tends to be more cooperative, polite, kind and friendly. "
-            )
-            if agreeableness > 1:
-                index_max = person_metrics[20:30].idxmax()
-                text_2 = (
-                    "In particular they said that " + questions[index_max][0] + ". "
-                )
-                text_t += text_2
-
-        else:
-            text_t = (
-                self.categorie_description(agreeableness)
-                + cat_0
-                + "The candidate tends to be less cooperative, polite, kind and friendly. "
-            )
-            if agreeableness < -1:
-                index_min = person_metrics[20:30].idxmin()
-                text_2 = (
-                    "In particular they said that " + questions[index_min][0] + ". "
-                )
-                text_t += text_2
-        text.append(text_t)
-
-        # conscientiousness
-        cat_0 = "extravagant and careless. "
-        cat_1 = "efficient and organized. "
-
-        if conscientiousness > 0:
-            text_t = (
-                self.categorie_description(conscientiousness)
-                + cat_1
-                + "The candidate tends to be more careful or diligent. "
-            )
-            if conscientiousness > 1:
-                index_max = person_metrics[30:40].idxmax()
-                text_2 = (
-                    "In particular they said that " + questions[index_max][0] + ". "
-                )
-                text_t += text_2
-        else:
-            text_t = (
-                self.categorie_description(conscientiousness)
-                + cat_0
-                + "The candidate tends to be less careful or diligent. "
-            )
-            if conscientiousness < -1:
-                index_min = person_metrics[30:40].idxmin()
-                text_2 = (
-                    "In particular they said that " + questions[index_min][0] + ". "
-                )
-                text_t += text_2
-        text.append(text_t)
-
-        # openness
-        cat_0 = "consistent and cautious. "
-        cat_1 = "inventive and curious. "
-
-        if openness > 0:
-            text_t = (
-                self.categorie_description(openness)
-                + cat_1
-                + "The candidate tends to be more open. "
-            )
-            if openness > 1:
-                index_max = person_metrics[40:50].idxmax()
-                text_2 = (
-                    "In particular they said that " + questions[index_max][0] + ". "
-                )
-                text_t += text_2
-        else:
-            text_t = (
-                self.categorie_description(openness)
-                + cat_0
-                + "The candidate tends to be less open. "
-            )
-            if openness < -1:
-                index_min = person_metrics[40:50].idxmin()
-                text_2 = (
-                    "In particular they said that " + questions[index_min][0] + ". "
-                )
-                text_t += text_2
-        text.append(text_t)
-
-        text = "".join(text)
-        text = text.replace(",", "")
-        return text
-
-    def synthesize_text(self):
-        person = self.person
-        metrics = self.person.ser_metrics
-        description = self.get_description(person)
-
-        return description
-
-    def get_prompt_messages(self):
-        prompt = (
-            f"Please use the statistical description enclosed with ``` to give a concise, 4 sentence summary of the person's personality, strengths and weaknesses. "
-            f"The first sentence should use varied language to give an overview of the person. "
-            "The second sentence should describe the person's specific strengths based on the metrics. "
-            "The third sentence should describe aspects in which the person is average and/or weak based on the statistics. "
-            "Finally, summarise exactly how the person compares to others in the same position. "
-        )
-        return [{"role": "user", "content": prompt}]
 
 class IndividualDescription(Description):
     output_token_limit = 150
@@ -698,7 +232,8 @@ class IndividualDescription(Description):
         self.individuals = individuals
         self.threshold_type = threshold_type
         self.odds_space = odds_space
-        self.risk_age = risk_age
+        # Risk age needs an 'age' coefficient in the model
+        self.risk_age = risk_age and 'age' in set(model_features['Parameter'])
         super().__init__()
 
 
@@ -713,8 +248,8 @@ class IndividualDescription(Description):
             {
                 "role": "system",
                 "content": (
-                    "You are doctor. "
-                    "You have been asked to provide a summary of a patient's risk of developing cardio-vascular disease. "
+                    "You are a doctor. "
+                    f"You have been asked to provide a summary of a patient's risk of developing {self.target} issues. "
                 ),
             },
         ]
@@ -731,8 +266,8 @@ class IndividualDescription(Description):
 
     def synthesize_text(self):
         metrics = self.metrics
-        calculated_age= self.calculate_risk_age()
-        beta_age= self.get_beta("age")
+        calculated_age = self.calculate_risk_age() if self.risk_age else None
+        beta_age = self.get_beta("age") if self.risk_age else None
         description = f"Here is a statistical description of the factors related to {self.target} issues for the patient. \n\n "
         for metric in metrics:
             description += (
@@ -752,19 +287,18 @@ class IndividualDescription(Description):
         if self.categorical_interpretations and metric in self.categorical_interpretations:
             # if categorical interpretation is available, look up the value in the interpretation dictionary
             interperation = self.categorical_interpretations[metric].get(str(int(value)), value)
-            risk_increase = self.calcaulte_catergorical_risk_age_increase(beta_feature, beta_age)
             text = f" {interperation} "
         else:
             # if no interpretation is available, just use the value
             text = sentences.article(self.parameter_explanation[metric].lower()) + f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(value)} "
-            risk_increase = self.calculate_risk_age_increase(metric, value, beta_feature, beta_age)
+        risk_increase = self.calculate_risk_age_increase(metric, value, beta_feature, beta_age) if self.risk_age else 0
         
         feature_bins = {k: v for k, v in self.bins.items() if k != 'total_risk_contribution'}
         avg = np.array(list(feature_bins.values())).mean(axis=0).tolist()
         
         thresholds = (
     self.thresholds
-    if self.threshold_type == "highest"
+    if self.threshold_type in ("highest", "age")
     else self.bins.get(f"{metric}_contribution", self.thresholds)
     if self.threshold_type == "feature_specific"
     else avg
@@ -798,13 +332,12 @@ class IndividualDescription(Description):
         if self.categorical_interpretations and metric in self.categorical_interpretations:
             # if categorical interpretation is available, look up the value in the interpretation dictionary
             interperation = self.categorical_interpretations[metric].get(str(int(value)), value)
-            risk_increase = self.calcaulte_catergorical_risk_age_increase(beta_feature, beta_age)
             text = f" {interperation} "
             
         else:
             # if no interpretation is available, just use the value
             text = sentences.article(self.parameter_explanation[metric].lower()) + f" {self.parameter_explanation[metric].lower()} of {sentences.format_numbers(value)} "
-            risk_increase = self.calculate_risk_age_increase(metric, value, beta_feature, beta_age)
+        risk_increase = self.calculate_risk_age_increase(metric, value, beta_feature, beta_age) if self.risk_age else 0
         
         contribution = individual.ser_metrics[metric + "_contribution"]
         if contribution>1:
@@ -854,12 +387,12 @@ class IndividualDescription(Description):
     def get_prompt_messages(self):
         prompt = (
             f"Please use the statistical description enclosed with ``` to give a concise summary of the patients health metrics focusing on factors that negatively and postively affect their risk of developing {self.target} issues. Use second person language to address the patient. Write a concise, conversational paragraph (4-7 sentneces) that:"
-            f"1. Begins with a greeting and a summary of the user’s overall cardiovascular risk, including heart age if applicable. "
-            "2. Highlights protective or positive factors first (blood pressure, BMI, blood sugar, lifestyle habits, sex/age effects)."
-            "3. Explains the main risk factors, why they matter, and their impact on heart health."
-            "4. Offers practical guidance or next steps the user can take to reduce risk or maintain heart health"
+            f"1. Begins with a greeting and a summary of the user’s overall risk, including their risk age if applicable. "
+            "2. Highlights protective or positive factors first."
+            "3. Explains the main risk factors, why they matter, and their impact on the patient's health."
+            "4. Offers practical guidance or next steps the user can take to reduce risk or maintain good health. "
             "5. Uses an approachable, supportive, and professional tone — interpretive and evidence-based, but avoid speculation beyond the provided data."
-            "6. Refers to the user’s data directly in context, balances positives and negatives, and flows naturally like a short personal summary rather than a bulleted list."
+            "6. Refers to the user’s data directly in context, balances positives and negatives, and flows naturally like a short personal summary rather than a bulleted list. "
         )
         return [{"role": "user", "content": prompt}]
     
@@ -901,17 +434,14 @@ class IndividualDescription(Description):
         
         calucalted_risk_age= individual.ser_metrics['age'] + (total_contribution / beta_age)
 
-        return min(max(calucalted_risk_age, 33), 90)
+        # Keep the risk age within the ages seen in the data
+        return min(max(calucalted_risk_age, self.individuals['age'].min()), self.individuals['age'].max())
         # return calucalted_risk_age
         
     def calculate_risk_age_increase(self,metric, feature_value, beta_feature, beta_age):
         # Calculate the increase in risk age based on the feature value and baseline feature value
         feature_baseline = self.individuals[metric].mean()
         return (feature_value - feature_baseline) * beta_feature / beta_age
-        
-    def calcaulte_catergorical_risk_age_increase(self, beta_category, beta_age):
-        # Calculate the increase in risk age based on the feature value and baseline feature value
-        return beta_category / beta_age
         
     
     def get_beta(self, param):
